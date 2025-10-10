@@ -1,0 +1,17 @@
+srm_metadata,owning_team,use_case
+"name=Consulting - General Storage Questions; category=Consulting",Data Storage,General guidance on storage capabilities and standards
+"name=New File Share Creation; category=Provisioning",Data Storage,Provision new SMB/NFS file share for team/project use
+"name=Increase File Share Quota; category=Capacity Change",Data Storage,Expand existing share capacity to meet growth
+"name=Storage Volume Provisioning; category=Provisioning",Data Storage,Create and present new block volume to host/cluster
+"name=Storage Volume Decommission; category=Decommission",Data Storage,Retire volume and reclaim capacity following approval
+"name=Production File Restore; category=Restore",Backup Services,Restore critical files from last good backup
+"name=Bulk File Restore; category=Restore",Backup Services,Recover large set of files for user or application
+"name=Bare-Metal Machine Restore; category=DR",Backup Services,Recover full server from backup to same or new hardware
+"name=VM Resource Increase; category=Change",Data Operations,Increase vCPU/memory for an existing VM per approval
+"name=VM Snapshot Restore; category=Restore",Backup Services,Revert VM to a specific snapshot on request
+"name=Backup Job Creation; category=Backup",Backup Services,Create new backup policy and onboard asset to backups
+"name=Backup Job Tuning; category=Backup",Backup Services,Adjust schedules/retention to optimize success rate
+"name=Backup Health Report; category=Reporting",Backup Services,Provide weekly success/failure and coverage report
+"name=Offsite DR Test; category=DR",Backup Services,Execute planned DR test and document results
+"name=Storage Monitoring Alert Triage; category=Operations",Data Operations,Investigate storage alerts and escalate per runbook
+

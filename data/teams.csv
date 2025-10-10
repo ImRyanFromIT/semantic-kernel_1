@@ -1,0 +1,5 @@
+team,mission,services_offered,technologies_owned_and_used,smes
+Data Storage,"Engineering team responsible for enterprise data storage platform","Storage Platform Design & Implementation; File Share Creation; Storage Expansion & Performance Tuning; Data Migration","NetApp; EMC; SAN/NAS; VMware; Azure; Windows; Linux","Michael Rodriguez; Priya Patel; Emily Johnson"
+Backup Services,"Specialist team managing backup and disaster recovery solutions","Backup Design & Implementation; Backup & Restore Operations; Backup Monitoring; Disaster Recovery Consulting","Veeam; CommVault; NetApp; Windows; Linux","Robert Martinez; Amanda Taylor; Kevin Brown"
+Data Operations,"Operations team handling day-to-day data storage operations","Storage Operations Support; Storage Monitoring & Maintenance; Capacity Planning","Monitoring Tools; NetApp; EMC; Windows; Linux; Scripting","Marcia Garcia; Eric Long; Ximena Patel"
+
