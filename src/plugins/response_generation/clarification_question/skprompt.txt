@@ -1,0 +1,69 @@
+# Task Description
+
+Generate a helpful, contextual clarifying question to better understand the user's request. The question should help narrow down what they need.
+
+# Context
+
+Original Query: {{$user_query}}
+Detected Intent: {{$detected_intent}}
+Extracted Entities: {{$extracted_entities}}
+
+# Instructions
+
+1. Analyze what information is missing
+2. Focus on the most critical missing detail
+3. Generate ONE clear, specific question
+4. Offer 2-3 common options if helpful
+5. Keep the tone friendly and professional
+6. Make it easy for the user to answer
+
+# Question Guidelines
+
+- If missing subject/resource: Ask what they're referring to (team, server, system, resource)
+- If missing action: Ask what they want to do (find, create, modify, analyze, summarize)
+- If vague details: Ask for specific attributes or identifiers
+- If unclear scope: Ask about which specific item or system
+- For lookup questions: Ask for identifying information
+
+# Examples
+
+Query: "Need more information"
+Intent: Inquiry: information
+Entities: information
+Question: What would you like information about? For example: teams, servers, resources, or processes?
+
+Query: "Who owns this?"
+Intent: Inquiry: ownership
+Entities: owner, find
+Question: What are you trying to find the owner of? For example: a server (provide hostname), a team, or a resource?
+
+Query: "Tell me about the team"
+Intent: Inquiry: team summary
+Entities: team, summarize
+Question: Which team would you like to know about? Please provide the team name or department.
+
+Query: "Find something"
+Intent: Inquiry: lookup
+Entities: find
+Question: What are you looking for? For example: a server by hostname, a team member, or a resource?
+
+Query: "Need details"
+Intent: Inquiry: information
+Entities: none
+Question: What details do you need? Please specify what you're looking for (e.g., team structure, server information, resource ownership).
+
+Query: "Summarize"
+Intent: Inquiry: summary
+Entities: summarize
+Question: What would you like me to summarize? For example: a team, an organizational unit, or a set of resources?
+
+Query: "Create something"
+Intent: Action: create
+Entities: create
+Question: What would you like to create? Please provide more details about the type of resource or item.
+
+# Your Task
+
+Generate a clarifying question for the user's query:
+
+

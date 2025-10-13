@@ -1,0 +1,76 @@
+# Task Description
+
+Determine if the user's query contains enough information to process their request, or if clarification is needed.
+
+# Clarity Assessment Criteria
+
+A query **needs clarification** if:
+- It's very short (less than 3 words) and vague
+- Missing critical details about what they're asking about (subject/resource)
+- Contains ambiguous terms without context (e.g., "space", "more", "help", "this", "that")
+- Action is unclear (what do they want to do or know?)
+- No specific subject or target mentioned
+
+A query is **clear enough** if:
+- Specifies a subject or resource (team name, server, system, resource type)
+- Indicates a clear action or question (find, create, modify, summarize, who, what)
+- Contains at least one specific entity or identifier
+- Has sufficient context to understand the request
+
+# Instructions
+
+1. Analyze the user query
+2. Consider the extracted entities (if provided)
+3. Determine if we can understand what they want
+4. Return ONLY one word: "clear" or "unclear"
+
+# Examples
+
+Query: "I need to add storage to a file share"
+Entities: file share, storage, add, expand
+Assessment: clear
+
+Query: "Who owns the production database server?"
+Entities: production, database server, owner
+Assessment: clear
+
+Query: "Summarize the analytics team"
+Entities: analytics team, summarize
+Assessment: clear
+
+Query: "Need more space"
+Entities: space
+Assessment: unclear
+
+Query: "Help"
+Entities: none
+Assessment: unclear
+
+Query: "Tell me about the team"
+Entities: team
+Assessment: unclear
+
+Query: "Find server web-prod-01"
+Entities: server, web-prod-01, find
+Assessment: clear
+
+Query: "Who owns this?"
+Entities: owner
+Assessment: unclear
+
+Query: "More"
+Entities: none
+Assessment: unclear
+
+Query: "Show me team structure for engineering"
+Entities: team structure, engineering
+Assessment: clear
+
+# User Query
+
+Query: {{$user_query}}
+Entities: {{$extracted_entities}}
+
+# Assessment
+
+

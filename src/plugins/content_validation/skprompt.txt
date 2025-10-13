@@ -1,0 +1,82 @@
+# Task Description
+
+Analyze the user's input and determine if it's genuine communication or junk/spam content.
+
+# Classification Rules
+
+**VALID** - Input is genuine communication:
+- Real questions or requests (even if off-topic)
+- Contains coherent words and sentence structure
+- Represents genuine intent to communicate
+- May have typos or informal language (still valid)
+
+**INVALID** - Input is junk/spam:
+- Random gibberish (e.g., "asdfasdf", "jkjkjkjk")
+- Excessive repetition of same char/word (e.g., "test test test test test test")
+- Binary data or hex strings
+- Only special characters with no meaning
+- Obvious spam or test strings
+
+# Important Guidelines
+
+1. Be LENIENT - err on the side of marking input as VALID
+2. Allow genuine questions even if they seem unusual
+3. Allow informal language, slang, abbreviations
+4. Allow typos and misspellings
+5. Only reject obvious junk/spam/gibberish
+
+# Output Format
+
+Return ONLY one of these:
+- "VALID" - for genuine communication
+- "INVALID: gibberish" - for random characters
+- "INVALID: spam" - for obvious spam patterns
+- "INVALID: test string" - for test/placeholder text
+- "INVALID: repetitive" - for excessive repetition
+
+# Examples
+
+Input: "I need to expand storage on a file share"
+Output: VALID
+
+Input: "asdfasdf"
+Output: INVALID: gibberish
+
+Input: "test test test test test test"
+Output: INVALID: repetitive
+
+Input: "Need help with VM"
+Output: VALID
+
+Input: "What's the weather like?"
+Output: VALID
+
+Input: "jkjkjkjkjkjkjk"
+Output: INVALID: gibberish
+
+Input: "restore files pls"
+Output: VALID
+
+Input: "!!!!!!!!!!!!!!!!"
+Output: INVALID: gibberish
+
+Input: "Who handles storage?"
+Output: VALID
+
+Input: "aaaaaaaaaaaaaaaaaaaa"
+Output: INVALID: repetitive
+
+Input: "Tell me about cats"
+Output: VALID
+
+Input: "test 123 test 123 test 123 test 123"
+Output: INVALID: test string
+
+# User Input
+
+{{$user_input}}
+
+# Validation Result
+
+
+

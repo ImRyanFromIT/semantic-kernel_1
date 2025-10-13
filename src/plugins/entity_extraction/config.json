@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "description": "Extract relevant entities from user queries",
+  "execution_settings": {
+    "default": {
+      "max_tokens": 200,
+      "temperature": 0.0,
+      "top_p": 0.1,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0
+    }
+  },
+  "input_variables": [
+    {
+      "name": "user_query",
+      "description": "The user's query to analyze for entities",
+      "default": "",
+      "is_required": true
+    },
+    {
+      "name": "entity_categories",
+      "description": "Optional comma-separated list of entity categories to focus on",
+      "default": "",
+      "is_required": false
+    }
+  ]
+}
+

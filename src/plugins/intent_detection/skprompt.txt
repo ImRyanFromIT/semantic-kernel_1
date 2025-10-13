@@ -1,0 +1,63 @@
+# Task Description
+
+Analyze the user's query and classify it as either an Action or an Inquiry, with a brief description of what they want to do or know.
+
+# Intent Types
+
+- **Action**: User wants to perform an operation, create/modify/delete something, or take some action
+- **Inquiry**: User is asking a question, seeking information, or needs clarification
+
+# Output Format
+
+Return in this format: "Type: brief description"
+
+Examples:
+- "Action: expand storage"
+- "Inquiry: team information"
+- "Action: restore files"
+- "Inquiry: server ownership"
+
+# Instructions
+
+1. Read the user query carefully
+2. Determine if it's an Action (doing something) or Inquiry (asking/learning)
+3. Identify the core subject or goal
+4. Return the classification with brief description
+5. Keep the description concise (2-4 words)
+
+# Examples
+
+Query: "I need to add storage to a file share"
+Intent: Action: expand storage
+
+Query: "Restore deleted files from last week"
+Intent: Action: restore files
+
+Query: "Who owns the production database?"
+Intent: Inquiry: server ownership
+
+Query: "Summarize the analytics team"
+Intent: Inquiry: team summary
+
+Query: "Need to create a new VM with 8 CPUs"
+Intent: Action: provision VM
+
+Query: "How does backup work?"
+Intent: Inquiry: backup process
+
+Query: "What teams handle storage requests?"
+Intent: Inquiry: team information
+
+Query: "Find server by hostname"
+Intent: Inquiry: server lookup
+
+Query: "Remove old backup policy"
+Intent: Action: delete policy
+
+# User Query
+
+{{$user_query}}
+
+# Intent
+
+

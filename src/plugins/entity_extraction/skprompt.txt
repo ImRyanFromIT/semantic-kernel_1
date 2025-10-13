@@ -1,0 +1,57 @@
+# Task Description
+
+Extract relevant entities from the user's query. Focus on specific terms, names, resource types, team names, actions, and quantifiable details.
+
+# General Entity Categories
+
+When no specific categories are provided, extract entities such as:
+- **Resource Types**: Any mentioned systems, services, infrastructure components
+- **Actions**: provision, expand, increase, create, remove, find, locate, summarize, analyze
+- **Quantities**: specific numbers with units (GB, TB, count, percentage, etc.)
+- **Names**: team names, person names, project names, system names
+- **Time References**: dates, deadlines, urgency indicators (ASAP, urgent, today, this week)
+- **Technical Terms**: domain-specific terminology relevant to the query
+
+# Instructions
+
+1. Read the user query carefully
+2. If specific entity categories are provided below, focus on those categories
+3. If no categories provided, extract all relevant entities generically
+4. Return entities as a comma-separated list
+5. Include only entities that appear in or are clearly implied by the query
+6. If no entities found, return "none"
+
+# Specific Categories (if provided)
+
+{{$entity_categories}}
+
+# Examples
+
+Query: "I need to add 500GB storage to a file share"
+Entities: file share, storage, 500GB, expand, add
+
+Query: "Who owns the production database server?"
+Entities: production, database server, owner, find
+
+Query: "Summarize the analytics team structure"
+Entities: analytics team, team structure, summarize
+
+Query: "Need to create a backup for new application ASAP"
+Entities: backup, application, create, ASAP, urgent
+
+Query: "Find server with hostname web-prod-01"
+Entities: server, hostname, web-prod-01, find
+
+Query: "Need more space"
+Entities: space
+
+Query: "Contact data team about quota"
+Entities: data team, quota, contact
+
+# User Query
+
+{{$user_query}}
+
+# Entities
+
+

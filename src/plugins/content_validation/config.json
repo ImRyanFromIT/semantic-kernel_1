@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "description": "Validates user input to detect gibberish, spam, and junk content",
+  "execution_settings": {
+    "default": {
+      "max_tokens": 50,
+      "temperature": 0.0,
+      "top_p": 1.0
+    }
+  },
+  "input_variables": [
+    {
+      "name": "user_input",
+      "description": "The user's input to validate",
+      "required": true
+    }
+  ],
+  "output_variable": {
+    "description": "Validation result: 'VALID' or 'INVALID: <reason>'"
+  }
+}
+
