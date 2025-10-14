@@ -1,0 +1,23 @@
+{
+    "schema": 1,
+    "type": "completion",
+    "description": "Semantically rerank SRM candidates using LLM reasoning",
+    "completion": {
+        "max_tokens": 1000,
+        "temperature": 0.0,
+        "top_p": 1.0
+    },
+    "input_variables": [
+        {
+            "name": "user_query",
+            "description": "The user's original query",
+            "required": true
+        },
+        {
+            "name": "candidates",
+            "description": "List of candidate SRMs to rank",
+            "required": true
+        }
+    ]
+}
+
