@@ -1,6 +1,6 @@
-# AI Concierge - SRM Discovery Chatbot
+# AI Concierge
 
-An AI chatbot built with Semantic Kernel that helps users find the right Service Request Model (SRM) for service needs. The system uses semantic search with vector embeddings and a process-based workflow to analyze queries, retrieve relevant information, and provide confident recommendations.
+An AI chatbot built with Semantic Kernel that helps users find relevant information and recommendations. The system uses semantic search with vector embeddings and a process-based workflow to analyze queries, retrieve relevant information, and provide confident recommendations.
 
 ## Architecture
 
@@ -33,7 +33,25 @@ AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME=text-embedding-3-small
 
 ## Usage
 
-### Interactive Mode
+### Web Interface (Recommended)
+
+Start the FastAPI web server:
+
+```bash
+python app.py
+```
+
+Or using uvicorn directly:
+
+```bash
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Then open your browser to: http://localhost:8000
+
+The web interface provides a modern chat experience for interacting with the AI Concierge.
+
+### CLI Interactive Mode
 
 python main.py
 
@@ -71,11 +89,13 @@ python main.py --test
 
 ## Project Structure
 
+- `app.py` - FastAPI web interface entry point
 - `main.py` - CLI entry point
+- `web/` - Web interface files (HTML, CSS, JavaScript)
 - `src/processes/` - Process and steps (Clarity, Retrieval, Rerank, Answer)
 - `src/memory/` - Vector store implementations
 - `src/plugins/` - LLM prompt plugins
-- `data/srm_index.csv` - SRM catalog
+- `data/` - Data catalog files
 
 ### Example Query
 
