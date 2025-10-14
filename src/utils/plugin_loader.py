@@ -91,6 +91,7 @@ def load_all_plugins(kernel: Kernel, base_path: Optional[str] = None) -> None:
     - entity_extraction
     - query_classification (clarity)
     - response_generation (clarification_question)
+    - semantic_reranking (LLM-based candidate reranking)
     
     Args:
         kernel: Semantic Kernel instance to register plugins with
@@ -123,6 +124,9 @@ def load_all_plugins(kernel: Kernel, base_path: Optional[str] = None) -> None:
         
         # Response generation
         ('clarification_generator', base_path / 'response_generation' / 'clarification_question', 'generate_clarification'),
+        
+        # Semantic reranking
+        ('semantic_reranker', base_path / 'semantic_reranking' / 'semantic_reranking_SRM', 'semantic_reranking'),
     ]
     
     # Load each plugin

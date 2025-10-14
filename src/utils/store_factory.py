@@ -11,14 +11,14 @@ from src.memory.azure_search_store import AzureAISearchStore
 
 
 def create_vector_store(
-    embedding_generator: EmbeddingGeneratorBase,
+    embedding_generator: EmbeddingGeneratorBase | None = None,
     store_type: str | None = None
 ) -> VectorStoreBase:
     '''
     Create a vector store instance based on configuration.
     
     Args:
-        embedding_generator: The embedding service to use
+        embedding_generator: The embedding service to use (required for in_memory, optional for azure_search)
         store_type: Type of store ("azure_search" or "in_memory").
                    If None, reads from VECTOR_STORE_TYPE env var.
                    Defaults to "azure_search" if not specified.
@@ -37,9 +37,11 @@ def create_vector_store(
     
     # Create appropriate store
     if store_type == 'azure_search':
-        print("[*] Using Azure AI Search vector store")
-        return AzureAISearchStore(embedding_generator)
+        print("[*] Using Azure AI Search text-only store")
+        return AzureAISearchStore()
     elif store_type == 'in_memory':
+        if not embedding_generator:
+            raise ValueError("embedding_generator is required for in_memory store")
         print("[*] Using In-Memory vector store")
         return InMemoryVectorStore(embedding_generator)
     else:

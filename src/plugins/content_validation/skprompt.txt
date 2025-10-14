@@ -1,29 +1,36 @@
 # Task Description
 
-Analyze the user's input and determine if it's genuine communication or junk/spam content.
+Analyze the user's input and determine if it's genuine communication or junk/spam/nonsense content.
+
+This system handles IT service requests related to storage, backups, VMs, databases, and infrastructure management.
 
 # Classification Rules
 
 **VALID** - Input is genuine communication:
-- Real questions or requests (even if off-topic)
+- Questions or requests about IT services, infrastructure, or related topics
+- General inquiries about the system or help
 - Contains coherent words and sentence structure
 - Represents genuine intent to communicate
 - May have typos or informal language (still valid)
+- Can be slightly off-topic but still reasonable questions
 
-**INVALID** - Input is junk/spam:
+**INVALID** - Input is junk/spam/nonsense:
 - Random gibberish (e.g., "asdfasdf", "jkjkjkjk")
 - Excessive repetition of same char/word (e.g., "test test test test test test")
 - Binary data or hex strings
 - Only special characters with no meaning
 - Obvious spam or test strings
+- Nonsensical questions that make no logical sense (e.g., "Can elephants code in Python?", "What color is Tuesday?", "How many clouds fit in a keyboard?")
+- Absurd or impossible scenarios unrelated to IT services (e.g., "Make my computer fly to Mars", "Turn my server into a sandwich")
 
 # Important Guidelines
 
 1. Be LENIENT - err on the side of marking input as VALID
-2. Allow genuine questions even if they seem unusual
+2. Allow genuine questions even if they seem unusual or off-topic
 3. Allow informal language, slang, abbreviations
 4. Allow typos and misspellings
-5. Only reject obvious junk/spam/gibberish
+5. Only reject obvious junk/spam/gibberish/nonsense
+6. Distinguish between unusual but genuine questions vs. actual nonsense
 
 # Output Format
 
@@ -33,6 +40,7 @@ Return ONLY one of these:
 - "INVALID: spam" - for obvious spam patterns
 - "INVALID: test string" - for test/placeholder text
 - "INVALID: repetitive" - for excessive repetition
+- "INVALID: nonsense" - for nonsensical or absurd questions that make no logical sense
 
 # Examples
 
@@ -71,6 +79,24 @@ Output: VALID
 
 Input: "test 123 test 123 test 123 test 123"
 Output: INVALID: test string
+
+Input: "Can elephants code in Python?"
+Output: INVALID: nonsense
+
+Input: "What color is Tuesday?"
+Output: INVALID: nonsense
+
+Input: "How many clouds fit in a keyboard?"
+Output: INVALID: nonsense
+
+Input: "Make my server fly to Mars"
+Output: INVALID: nonsense
+
+Input: "Turn my computer into a sandwich"
+Output: INVALID: nonsense
+
+Input: "Is the database dreaming of electric sheep?"
+Output: INVALID: nonsense
 
 # User Input
 

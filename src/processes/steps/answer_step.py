@@ -143,8 +143,8 @@ class AnswerStep(KernelProcessStep):
         if selected.get('url'):
             answer += f"\n**URL:** {selected['url']}\n"
         
-        # Add alternatives if confidence is not very high
-        if alternatives and confidence < 0.85:
+        # Always show 2 alternative options
+        if alternatives:
             answer += "\n### Alternative Options:\n\n"
             for i, alt in enumerate(alternatives[:2], 1):
                 answer += f"{i}. **{alt['name']}** ({alt['category']}) - {alt['use_case']}\n"

@@ -41,6 +41,15 @@ def format_rejection_response(reason: str) -> str:
             "  - 'How does backup work?'\n\n"
             "Please describe what you'd like help with in a clear sentence."
         ),
+        'nonsense': (
+            "I can't help with that question as it doesn't seem to relate to IT services. "
+            "I'm designed to assist with infrastructure and service requests such as:\n"
+            "  - Storage and file share management\n"
+            "  - VM and server resources\n"
+            "  - Backup and recovery services\n"
+            "  - Database administration\n\n"
+            "How can I help with your IT service needs?"
+        ),
         'spam_pattern': (
             "It looks like there might be an issue with your input. "
             "Please describe what you'd like help with in a clear sentence. "
@@ -101,7 +110,9 @@ def get_rejection_reason_from_validation(validation_result: str) -> str:
         reason_text = validation_result.split('INVALID:')[1].strip().lower()
         
         # Map to categories
-        if 'gibberish' in reason_text or 'nonsense' in reason_text:
+        if 'nonsense' in reason_text:
+            return 'nonsense'
+        elif 'gibberish' in reason_text:
             return 'gibberish'
         elif 'spam' in reason_text or 'test' in reason_text:
             return 'spam_pattern'

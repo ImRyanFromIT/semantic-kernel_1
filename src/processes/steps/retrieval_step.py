@@ -99,6 +99,7 @@ class RetrievalStep(KernelProcessStep):
         
         # Emit appropriate event
         if len(candidates) > 0:
+            # Pass candidates to reranker for LLM-based scoring
             await context.emit_event(
                 process_event=self.OutputEvents.CandidatesFound.value,
                 data={
@@ -113,6 +114,9 @@ class RetrievalStep(KernelProcessStep):
             await context.emit_event(
                 process_event=self.OutputEvents.NoCandidates.value,
                 data={
+                    "selected_srm": None,
+                    "confidence": 0.0,
+                    "alternatives": [],
                     "query": search_query,
                     "user_query": user_query,
                     "vector_store": vector_store,
