@@ -1,18 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
 
     // --- DATA ---
-    const srmData = [
-        { id: 1, name: "Connector: Storage Expansion", description: "Request additional storage capacity for an existing network file share or drive." },
-        { id: 2, name: "Connector: File Restoration", description: "Request the restoration of files or folders from a backup for a server or file share." },
-        { id: 3, name: "Connector: VM Resource Adjustment", description: "Increase the CPU core count or memory (RAM) allocated to an existing virtual machine." },
-        { id: 4, name: "Connector: New Virtual Machine", description: "Provision a new virtual machine with a standard operating system build." },
-    ];
-
     const i18n = {
         en: {
             problemLabel: "Describe your problem",
             helperText: "Be as specific as possible.",
             search: "Search",
+            searching: "Searching...",
+            searchingMessage: "Searching for the right SRM...",
             suggestions: [
                 "Expand storage on a file share",
                 "Restore deleted files",
@@ -22,6 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
             firstResult: "The result is",
             noResultsTitle: "No matching Connector found",
             noResultsBody: "Your request will be routed to a general queue. Please submit it and a team member will assist you.",
+            connectionError: "Connection Error",
+            connectionErrorBody: "Unable to connect to the server. Please try again later.",
             language: "Language:",
             themeSystem: "System",
             themeLight: "Light",
@@ -31,6 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
             problemLabel: "Describa su problema",
             helperText: "Sea lo más específico posible.",
             search: "Buscar",
+            searching: "Buscando...",
+            searchingMessage: "Buscando el SRM correcto...",
             suggestions: [
                 "Ampliar almacenamiento",
                 "Restaurar archivos",
@@ -40,6 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
             firstResult: "El resultado es",
             noResultsTitle: "No se encontró ningún Conector coincidente",
             noResultsBody: "Su solicitud se enviará a una cola general. Envíela y un miembro del equipo le ayudará.",
+            connectionError: "Error de conexión",
+            connectionErrorBody: "No se puede conectar al servidor. Inténtelo de nuevo más tarde.",
             language: "Idioma:",
             themeSystem: "Sistema",
             themeLight: "Claro",
@@ -68,19 +69,97 @@ document.addEventListener('DOMContentLoaded', () => {
         return temp.innerHTML;
     };
     
-    const mockBackendSearch = (query) => {
-        const normalizedQuery = query.toLowerCase().trim();
-        if (normalizedQuery.includes('storage')) return [srmData[0]];
-        if (normalizedQuery.includes('restore') || normalizedQuery.includes('restaurar')) return [srmData[1]];
-        if (normalizedQuery.includes('cpu')) return [srmData[2]];
-        if (normalizedQuery) return [srmData[3]];
-        return [];
+    const realBackendSearch = async (query) => {
+        try {
+            const response = await fetch('/api/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            return data.response; // Returns markdown string
+        } catch (error) {
+            console.error('Backend search error:', error);
+            throw error;
+        }
+    };
+    
+    const parseMarkdownResponse = (markdown) => {
+        // Handle special response types
+        if (markdown.startsWith('[!]')) {
+            return { type: 'error', message: markdown.substring(3).trim() };
+        }
+        if (markdown.startsWith('[?]')) {
+            return { type: 'clarification', message: markdown.substring(3).trim() };
+        }
+        
+        // Parse recommended SRM
+        const nameMatch = markdown.match(/##\s+Recommended SRM:\s+(.+)/);
+        const categoryMatch = markdown.match(/\*\*Category:\*\*\s+(.+)/);
+        const useCaseMatch = markdown.match(/\*\*Use Case:\*\*\s+(.+)/);
+        const owningTeamMatch = markdown.match(/\*\*Owning Team:\*\*\s+(.+)/);
+        const urlMatch = markdown.match(/\*\*URL:\*\*\s+(.+)/);
+        
+        if (!nameMatch) {
+            // No matching SRM found
+            return { type: 'no_results', message: markdown };
+        }
+        
+        const result = {
+            type: 'success',
+            name: nameMatch[1].trim(),
+            category: categoryMatch ? categoryMatch[1].trim() : '',
+            useCase: useCaseMatch ? useCaseMatch[1].trim() : '',
+            owningTeam: owningTeamMatch ? owningTeamMatch[1].trim() : '',
+            url: urlMatch ? urlMatch[1].trim() : '',
+            alternatives: []
+        };
+        
+        // Parse alternatives section
+        const alternativesSection = markdown.split('### Alternative Options:')[1];
+        if (alternativesSection) {
+            const altLines = alternativesSection.split('\n');
+            let currentAlt = null;
+            
+            for (const line of altLines) {
+                // Match numbered alternatives: "1. **Name** (Category) - Use case"
+                const altMatch = line.match(/^\d+\.\s+\*\*(.+?)\*\*\s+\((.+?)\)\s+-\s+(.+)/);
+                if (altMatch) {
+                    if (currentAlt) {
+                        result.alternatives.push(currentAlt);
+                    }
+                    currentAlt = {
+                        name: altMatch[1].trim(),
+                        category: altMatch[2].trim(),
+                        useCase: altMatch[3].trim(),
+                        url: ''
+                    };
+                } else if (currentAlt && line.includes('**URL:**')) {
+                    const urlMatch = line.match(/\*\*URL:\*\*\s+(.+)/);
+                    if (urlMatch) {
+                        currentAlt.url = urlMatch[1].trim();
+                    }
+                }
+            }
+            
+            if (currentAlt) {
+                result.alternatives.push(currentAlt);
+            }
+        }
+        
+        return result;
     };
 
-    const renderResults = (results) => {
+    const renderResults = (parsedResult) => {
         resultsContainer.innerHTML = '';
         
-        if (results.length === 0) {
+        // Handle error/clarification/no results
+        if (!parsedResult || parsedResult.type === 'no_results') {
             resultsContainer.innerHTML = `
                 <div class="empty-state" data-testid="empty-state">
                     <h3>${i18n[currentLocale].noResultsTitle}</h3>
@@ -89,9 +168,28 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             return;
         }
+        
+        if (parsedResult.type === 'error') {
+            resultsContainer.innerHTML = `
+                <div class="empty-state" data-testid="error-state">
+                    <h3>Error</h3>
+                    <p>${sanitize(parsedResult.message)}</p>
+                </div>
+            `;
+            return;
+        }
+        
+        if (parsedResult.type === 'clarification') {
+            resultsContainer.innerHTML = `
+                <div class="empty-state" data-testid="clarification-state">
+                    <h3>Need More Information</h3>
+                    <p>${sanitize(parsedResult.message)}</p>
+                </div>
+            `;
+            return;
+        }
 
-        const result = results[0];
-
+        // Render successful SRM result
         const resultCountText = document.createElement('h2');
         resultCountText.className = 'visually-hidden';
         resultCountText.textContent = i18n[currentLocale].resultFound;
@@ -104,14 +202,79 @@ document.addEventListener('DOMContentLoaded', () => {
         const listItem = document.createElement('li');
         listItem.className = 'srm-card';
         listItem.setAttribute('role', 'listitem');
-        listItem.setAttribute('data-testid', `srm-card-${result.id}`);
+        listItem.setAttribute('data-testid', 'srm-card-result');
         
-        listItem.innerHTML = `<h2 data-testid="srm-name">${sanitize(result.name)}</h2>`;
-
+        let cardContent = `<h2 data-testid="srm-name">${sanitize(parsedResult.name)}</h2>`;
+        
+        // Add category
+        if (parsedResult.category) {
+            cardContent += `
+                <div class="srm-field">
+                    <span class="srm-field-label">Category:</span>
+                    <span class="srm-field-value">${sanitize(parsedResult.category)}</span>
+                </div>
+            `;
+        }
+        
+        // Add use case
+        if (parsedResult.useCase) {
+            cardContent += `
+                <div class="srm-field">
+                    <span class="srm-field-label">Use Case:</span>
+                    <span class="srm-field-value">${sanitize(parsedResult.useCase)}</span>
+                </div>
+            `;
+        }
+        
+        // Add owning team
+        if (parsedResult.owningTeam) {
+            cardContent += `
+                <div class="srm-field">
+                    <span class="srm-field-label">Owning Team:</span>
+                    <span class="srm-field-value">${sanitize(parsedResult.owningTeam)}</span>
+                </div>
+            `;
+        }
+        
+        // Add URL
+        if (parsedResult.url) {
+            cardContent += `
+                <div class="srm-field">
+                    <span class="srm-field-label">URL:</span>
+                    <a href="${sanitize(parsedResult.url)}" class="srm-url" target="_blank" rel="noopener noreferrer">${sanitize(parsedResult.url)}</a>
+                </div>
+            `;
+        }
+        
+        // Add alternatives section
+        if (parsedResult.alternatives && parsedResult.alternatives.length > 0) {
+            cardContent += `<div class="srm-alternatives">
+                <h3>Alternative Options:</h3>
+                <ol class="alternatives-list">`;
+            
+            parsedResult.alternatives.forEach(alt => {
+                cardContent += `
+                    <li class="alternative-item">
+                        <strong>${sanitize(alt.name)}</strong> (${sanitize(alt.category)}) - ${sanitize(alt.useCase)}`;
+                
+                if (alt.url) {
+                    cardContent += `<br><a href="${sanitize(alt.url)}" class="srm-url" target="_blank" rel="noopener noreferrer">${sanitize(alt.url)}</a>`;
+                }
+                
+                cardContent += `</li>`;
+            });
+            
+            cardContent += `</ol></div>`;
+        }
+        
+        // Add footer note
+        cardContent += `<p class="srm-footer">If this doesn't match your need, please provide more details and I'll search again.</p>`;
+        
+        listItem.innerHTML = cardContent;
         list.appendChild(listItem);
         resultsContainer.appendChild(list);
 
-        const announcement = `${i18n[currentLocale].firstResult} ${result.name}.`;
+        const announcement = `${i18n[currentLocale].firstResult} ${parsedResult.name}.`;
         srAnnouncer.textContent = announcement;
         setTimeout(() => srAnnouncer.textContent = '', 1000);
     };
@@ -147,18 +310,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const runSearch = (query) => {
+    const runSearch = async (query) => {
         if (!query.trim()) return;
 
+        // Store original button text
+        const originalButtonText = searchBtn.textContent;
+        
+        // Set loading state
         searchBtn.setAttribute('aria-busy', 'true');
         resultsContainer.setAttribute('aria-busy', 'true');
+        searchBtn.disabled = true;
+        searchBtn.textContent = i18n[currentLocale].searching;
+        searchBtn.classList.add('searching');
         
-        setTimeout(() => {
-            const results = mockBackendSearch(query);
-            renderResults(results);
+        // Show loading indicator in results
+        resultsContainer.innerHTML = `
+            <div class="loading-state" data-testid="loading-state">
+                <div class="spinner"></div>
+                <p>${i18n[currentLocale].searchingMessage}</p>
+            </div>
+        `;
+        
+        try {
+            const markdown = await realBackendSearch(query);
+            const parsedResult = parseMarkdownResponse(markdown);
+            renderResults(parsedResult);
+        } catch (error) {
+            console.error('Search error:', error);
+            resultsContainer.innerHTML = `
+                <div class="empty-state" data-testid="error-state">
+                    <h3>${i18n[currentLocale].connectionError}</h3>
+                    <p>${i18n[currentLocale].connectionErrorBody}</p>
+                </div>
+            `;
+        } finally {
             searchBtn.setAttribute('aria-busy', 'false');
             resultsContainer.setAttribute('aria-busy', 'false');
-        }, 250);
+            searchBtn.disabled = false;
+            searchBtn.textContent = originalButtonText;
+            searchBtn.classList.remove('searching');
+        }
     };
 
     const adjustMainPadding = () => {
@@ -189,13 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localeSwitcher.addEventListener('change', (e) => {
         currentLocale = e.target.value;
         updateUIStrings();
-        if (resultsContainer.innerHTML.trim() !== '') {
-            const query = input.value;
-            if (query.trim()) {
-                const results = mockBackendSearch(query);
-                renderResults(results);
-            }
-        }
+        // Note: Results are not re-rendered on locale change as they come from the backend in English
     });
     
     themeRadios.forEach(radio => {

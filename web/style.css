@@ -273,8 +273,14 @@ button, input, select, textarea {
     outline-offset: 2px;
 }
 
-.search-btn[aria-busy="true"] {
+.search-btn[aria-busy="true"],
+.search-btn.searching {
     cursor: wait;
+    opacity: 0.8;
+}
+
+.search-btn:disabled {
+    cursor: not-allowed;
 }
 
 /* ----------------- */
@@ -303,7 +309,74 @@ button, input, select, textarea {
 .srm-card h2 {
     font-size: 1.25rem;
     color: var(--accent);
-    margin-bottom: 0;
+    margin-bottom: 0.75rem;
+}
+
+.srm-field {
+    margin: 0.75rem 0;
+    line-height: 1.5;
+}
+
+.srm-field-label {
+    font-weight: 600;
+    color: var(--muted);
+    margin-right: 0.5rem;
+}
+
+.srm-field-value {
+    color: var(--text);
+}
+
+.srm-url {
+    color: var(--accent);
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.srm-url:hover {
+    text-decoration: underline;
+}
+
+.srm-url:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+.srm-alternatives {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--card-border);
+}
+
+.srm-alternatives h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+}
+
+.alternatives-list {
+    padding-left: 1.5rem;
+    margin: 0;
+}
+
+.alternative-item {
+    margin: 0.75rem 0;
+    line-height: 1.6;
+}
+
+.alternative-item strong {
+    color: var(--accent);
+}
+
+.srm-footer {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--card-border);
+    font-style: italic;
+    color: var(--muted);
+    font-size: 0.9rem;
 }
 
 .empty-state {
@@ -311,6 +384,33 @@ button, input, select, textarea {
     padding: 2rem;
     border: 2px dashed var(--card-border);
     border-radius: 8px;
+}
+
+.loading-state {
+    text-align: center;
+    padding: 2rem;
+    animation: fadeIn 300ms var(--ease-out) forwards;
+}
+
+.loading-state p {
+    margin-top: 1rem;
+    color: var(--muted);
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    margin: 0 auto;
+    border: 4px solid var(--card-border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* ----------------- */
