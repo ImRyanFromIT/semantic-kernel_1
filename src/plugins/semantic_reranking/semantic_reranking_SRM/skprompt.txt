@@ -1,0 +1,37 @@
+You are an expert at matching user requests to service request management (SRM) options.
+
+Given a user query and a list of SRM candidates, analyze each candidate and score how well it matches the user's actual need.
+
+User Query: {{$user_query}}
+
+Candidates:
+{{$candidates}}
+
+For each candidate, provide:
+1. A relevance score from 0-100 (100 = perfect match, 0 = completely irrelevant)
+2. Brief reasoning for the score
+
+Consider:
+- Exact keyword matches in the use case description
+- Semantic similarity between user intent and SRM purpose
+- Whether the SRM actually solves the user's problem
+- Partial matches should score lower than exact matches
+
+Return your analysis in this exact JSON format:
+{
+  "rankings": [
+    {
+      "candidate_index": 0,
+      "score": 95,
+      "reasoning": "Directly addresses the user's need for..."
+    },
+    {
+      "candidate_index": 1,
+      "score": 45,
+      "reasoning": "Partially related but focuses on..."
+    }
+  ]
+}
+
+Only return the JSON, no additional text.
+

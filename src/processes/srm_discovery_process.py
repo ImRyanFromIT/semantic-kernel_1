@@ -24,9 +24,9 @@ class SRMDiscoveryProcess:
     Process Flow:
     1. ValidationStep: Validate input against guardrails (length, patterns, content)
     2. ClarityStep: Analyze query and determine if clarification needed
-    3. RetrievalStep: Search for candidate SRMs using vector similarity
-    4. RerankStep: Score and select the best recommendation
-    5. AnswerStep: Format and return the final answer
+    3. RetrievalStep: Search for candidate SRMs using BM25 text search
+    4. RerankStep: Use LLM to semantically score and select the best recommendation
+    5. AnswerStep: Format and return the final answer with alternatives
     '''
     
     class ProcessEvents(Enum):
@@ -57,6 +57,7 @@ class SRMDiscoveryProcess:
         
         ValidationStep.set_kernel(kernel)
         ClarityStep.set_kernel(kernel)
+        RerankStep.set_kernel(kernel)
         AnswerStep.set_kernel(kernel)
         
         # Add steps
@@ -96,7 +97,7 @@ class SRMDiscoveryProcess:
         ).stop_process()
         
         # RetrievalStep -> RerankStep (if candidates found)
-        # Pass the entire event data dict
+        # Pass candidates for LLM-based semantic scoring
         retrieval_step.on_event(
             RetrievalStep.OutputEvents.CandidatesFound.value
         ).send_event_to(rerank_step, parameter_name="input_data")
@@ -106,14 +107,9 @@ class SRMDiscoveryProcess:
             RetrievalStep.OutputEvents.NoCandidates.value
         ).send_event_to(answer_step, parameter_name="input_data")
         
-        # RerankStep -> AnswerStep
-        # Pass the entire event data dict
+        # RerankStep -> AnswerStep (with selected recommendation and alternatives)
         rerank_step.on_event(
             RerankStep.OutputEvents.RecommendationSelected.value
-        ).send_event_to(answer_step, parameter_name="input_data")
-        
-        rerank_step.on_event(
-            RerankStep.OutputEvents.MultipleOptions.value
         ).send_event_to(answer_step, parameter_name="input_data")
         
         # AnswerStep -> Process complete

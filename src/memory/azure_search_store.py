@@ -1,5 +1,5 @@
 '''
-Azure AI Search vector store implementation.
+Azure AI Search text-only store implementation.
 '''
 
 import os
@@ -7,8 +7,6 @@ from typing import Any, AsyncIterator
 
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
-from azure.search.documents.models import VectorizedQuery
-from semantic_kernel.connectors.ai.embeddings.embedding_generator_base import EmbeddingGeneratorBase
 
 from src.memory.vector_store_base import VectorStoreBase
 
@@ -30,46 +28,38 @@ class SearchResult:
 
 class AzureAISearchStore(VectorStoreBase):
     '''
-    Azure AI Search implementation for vector store.
+    Azure AI Search implementation for text-only search.
     
-    Uses hybrid search combining keyword (BM25) and vector search with
-    Reciprocal Rank Fusion (RRF) for optimal retrieval quality.
+    Uses BM25 keyword search for retrieval.
     Works with direct SRM records containing service request information.
     '''
     
     def __init__(
         self, 
-        embedding_generator: EmbeddingGeneratorBase,
         endpoint: str | None = None,
         api_key: str | None = None,
-        index_name: str | None = None,
-        vector_field_name: str | None = None
+        index_name: str | None = None
     ):
         '''
         Initialize Azure AI Search store.
         
         Args:
-            embedding_generator: Service to generate embeddings for queries
             endpoint: Azure AI Search endpoint (or from env AZURE_AI_SEARCH_ENDPOINT)
             api_key: Azure AI Search API key (or from env AZURE_AI_SEARCH_API_KEY)
-            index_name: Vector index name (or from env AZURE_AI_SEARCH_VECTOR_INDEX_NAME)
-            vector_field_name: Name of the vector field in the index (or from env AZURE_AI_SEARCH_VECTOR_FIELD)
+            index_name: Index name (or from env AZURE_AI_SEARCH_INDEX_NAME)
         '''
-        self.embedding_generator = embedding_generator
-        
         # Get configuration from parameters or environment
         self.endpoint = endpoint or os.getenv('AZURE_AI_SEARCH_ENDPOINT')
         self.api_key = api_key or os.getenv('AZURE_AI_SEARCH_API_KEY')
-        # Use vector index for hybrid search (keyword + vector)
-        self.index_name = index_name or os.getenv('AZURE_AI_SEARCH_VECTOR_INDEX_NAME', 'vector-search')
-        self.vector_field_name = vector_field_name or os.getenv('AZURE_AI_SEARCH_VECTOR_FIELD', 'text_vector')
+        # Use text-only index for BM25 search
+        self.index_name = index_name or os.getenv('AZURE_AI_SEARCH_INDEX_NAME', 'search-semantics')
         
         if not self.endpoint:
             raise ValueError("Azure AI Search endpoint must be provided via parameter or AZURE_AI_SEARCH_ENDPOINT env var")
         if not self.api_key:
             raise ValueError("Azure AI Search API key must be provided via parameter or AZURE_AI_SEARCH_API_KEY env var")
         
-        # Create search client pointing to the vector index
+        # Create search client pointing to the text-only index
         self.search_client = SearchClient(
             endpoint=self.endpoint,
             index_name=self.index_name,
@@ -112,11 +102,9 @@ class AzureAISearchStore(VectorStoreBase):
         filters: dict | None = None
     ) -> AsyncIterator[SearchResult]:
         '''
-        Search using hybrid search (keyword + vector with RRF).
+        Search using text-only BM25 keyword search.
         
-        Combines BM25 keyword search with semantic vector search using
-        Reciprocal Rank Fusion (RRF) to rank results. This provides superior
-        retrieval quality by leveraging both exact matching and semantic similarity.
+        Uses BM25 keyword search for retrieval based on exact and fuzzy text matching.
         
         Args:
             query: The search query text
@@ -137,33 +125,10 @@ class AzureAISearchStore(VectorStoreBase):
                     filter_parts.append(f"{key} eq {value}")
             filter_str = " and ".join(filter_parts)
         
-        # Generate query embeddings for vector search
-        # Note: The vector field contains embeddings of the Description field
-        vector_queries = []
-        try:
-            # Generate embeddings using the embedding service
-            query_embedding = await self.embedding_generator.generate_embeddings([query])
-            
-            # Create vectorized query for hybrid search
-            # This will search against text_vector field (embeddings of Description)
-            vector_query = VectorizedQuery(
-                vector=query_embedding[0],  # First (and only) embedding
-                k_nearest_neighbors=top_k,
-                fields=self.vector_field_name
-            )
-            vector_queries.append(vector_query)
-            print(f"[+] Generated query embedding for hybrid search")
-        except Exception as e:
-            # Fall back to keyword-only search if embedding generation fails
-            print(f"[!] Warning: Failed to generate embeddings, falling back to keyword-only search: {e}")
-        
-        # Perform hybrid search (keyword + vector with RRF)
-        # When both search_text and vector_queries are provided, Azure AI Search
-        # automatically uses Reciprocal Rank Fusion (RRF) to combine results
+        # Perform text-only BM25 search
         results = self.search_client.search(
             search_text=query,  # Keyword/full-text search (BM25)
-            vector_queries=vector_queries if vector_queries else None,  # Semantic vector search
-            select=["chunk_id", "parent_id", "chunk", "Name", "Team", "Type", "URL_Link"],
+            select=["id", "SRM_ID", "Name", "Description", "URL_Link", "Team", "Type"],
             top=top_k,
             filter=filter_str,
             query_type="full"  # Use full Lucene query syntax for keyword matching
@@ -173,33 +138,32 @@ class AzureAISearchStore(VectorStoreBase):
         async def result_generator():
             for result in results:
                 # Map Azure AI Search field names to internal format
-                # Index fields: chunk_id, parent_id, chunk, Name, Team, Type, text_vector
-                # chunk → the actual service description text
+                # Index fields: id, SRM_ID, Name, Description, URL_Link, Team, Type
+                # Description → the actual service description text
                 # Name → service name
                 # Team → owning team
                 # Type → service type
-                chunk_id = result.get('chunk_id', '')
-                parent_id = result.get('parent_id', '')
-                chunk = result.get('chunk', '')  # The description/content text
+                record_id = result.get('id', '')
+                srm_id = result.get('SRM_ID', '')
                 name = result.get('Name', '')
+                description = result.get('Description', '')  # The description/content text
                 team = result.get('Team', '')
                 record_type = result.get('Type', 'Services')
-                
-                # Use chunk_id as the record ID
-                record_id = chunk_id if chunk_id else parent_id
+                url_link = result.get('URL_Link', '')
                 
                 # Create a simple object to hold the result data
                 record = type('Record', (), {
                     'id': record_id,
+                    'srm_id': srm_id,
                     'name': name,
-                    'content': chunk,  # Use chunk field which contains the description
-                    'use_case': chunk,  # Use chunk field which contains the description
+                    'content': description,  # Use Description field
+                    'use_case': description,  # Use Description field
                     'category': record_type,
                     'kind': record_type,
                     'owning_team': team,
                     'team': team,
                     'technologies': '',  # Not available in this index
-                    'url': result.get('URL_Link', ''),  # URL link to SRM documentation
+                    'url': url_link,
                 })()
                 
                 score = result.get('@search.score', 0.0)
@@ -212,7 +176,7 @@ class AzureAISearchStore(VectorStoreBase):
         Retrieve a specific record by ID.
         
         Args:
-            record_id: The unique identifier of the record (chunk_id)
+            record_id: The unique identifier of the record (id field)
             
         Returns:
             The record if found, None otherwise
@@ -223,22 +187,25 @@ class AzureAISearchStore(VectorStoreBase):
             # Convert to object format
             if result:
                 # Map Azure AI Search field names to internal format
-                chunk = result.get('chunk', '')
+                srm_id = result.get('SRM_ID', '')
                 name = result.get('Name', '')
+                description = result.get('Description', '')
                 team = result.get('Team', '')
                 record_type = result.get('Type', 'Services')
+                url_link = result.get('URL_Link', '')
                 
                 record = type('Record', (), {
                     'id': record_id,
+                    'srm_id': srm_id,
                     'name': name,
-                    'content': chunk,  # Use chunk field which contains the description
-                    'use_case': chunk,  # Use chunk field which contains the description
+                    'content': description,  # Use Description field
+                    'use_case': description,  # Use Description field
                     'category': record_type,
                     'kind': record_type,
                     'owning_team': team,
                     'team': team,
                     'technologies': '',  # Not available in this index
-                    'url': result.get('URL_Link', ''),  # URL link to SRM documentation
+                    'url': url_link,
                 })()
                 return record
             
