@@ -33,6 +33,9 @@ telemetry = None
 # FastAPI app
 app = FastAPI(title="AI Concierge")
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="web"), name="static")
+
 
 class QueryRequest(BaseModel):
     '''Request model for query endpoint.'''
