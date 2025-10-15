@@ -5,4 +5,4 @@ azure-identity
 python-dotenv
 azure-search-documents
 fastapi
-uvicorn[standard]
+uvicorn
