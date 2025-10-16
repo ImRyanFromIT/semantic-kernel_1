@@ -86,7 +86,8 @@ def load_all_plugins(kernel: Kernel, base_path: Optional[str] = None) -> None:
     Load all plugins from the src/plugins directory.
     
     This function loads all standard plugins used by the system:
-    - content_validation (input guardrails)
+    - content_validation (input guardrails for SRM queries)
+    - hostname_validation (input validation for hostname lookups)
     - intent_detection
     - entity_extraction
     - query_classification (clarity)
@@ -114,6 +115,7 @@ def load_all_plugins(kernel: Kernel, base_path: Optional[str] = None) -> None:
     plugins_to_load = [
         # Input validation
         ('content_validation', base_path / 'content_validation', 'content_validation'),
+        ('hostname_validation', base_path / 'hostname_validation', 'hostname_validation'),
         
         # Intent and entity extraction
         ('intent_detection', base_path / 'intent_detection', 'detect_intent'),

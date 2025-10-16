@@ -23,6 +23,7 @@ from src.utils.store_factory import create_vector_store
 from src.utils.debug_config import debug_print
 from src.data.data_loader import SRMDataLoader
 from src.processes.srm_discovery_process import SRMDiscoveryProcess
+from src.processes.hostname_lookup_process import HostnameLookupProcess
 
 
 # Global state - initialized at startup
@@ -44,6 +45,17 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     '''Response model for query endpoint.'''
+    response: str
+    session_id: str
+
+
+class HostnameRequest(BaseModel):
+    '''Request model for hostname lookup endpoint.'''
+    hostname: str
+
+
+class HostnameResponse(BaseModel):
+    '''Response model for hostname lookup endpoint.'''
     response: str
     session_id: str
 
@@ -168,6 +180,82 @@ async def run_query(user_query: str, session_id: str) -> str:
         return f"[!] An error occurred: {str(e)}"
 
 
+async def run_hostname_query(hostname_query: str, session_id: str) -> str:
+    '''
+    Run a hostname lookup query.
+    
+    Args:
+        hostname_query: The hostname to look up
+        session_id: Session identifier
+        
+    Returns:
+        The formatted hostname information
+    '''
+    # Create process
+    process_builder = HostnameLookupProcess.create_process(kernel)
+    kernel_process = process_builder.build()
+    
+    # Create initial event data with user_query and session_id
+    initial_data = {
+        "user_query": hostname_query,
+        "session_id": session_id,
+    }
+    
+    # Start process
+    telemetry.log_process_state_change(
+        session_id=session_id,
+        process="HostnameLookupProcess",
+        from_state="init",
+        to_state="running"
+    )
+    
+    try:
+        async with await start(
+            process=kernel_process,
+            kernel=kernel,
+            initial_event=KernelProcessEvent(
+                id=HostnameLookupProcess.ProcessEvents.StartProcess.value,
+                data=initial_data
+            ),
+        ) as process_context:
+            # Get final state
+            final_state = await process_context.get_state()
+            
+            # Debug: print state info
+            debug_print(f"DEBUG: Process completed. State: {type(final_state)}")
+            if hasattr(final_state, 'name'):
+                debug_print(f"DEBUG: Process name: {final_state.name}")
+            
+            # Retrieve result from global store
+            result = get_result(session_id)
+            clear_result(session_id)
+            
+            debug_print(f"DEBUG: Retrieved result for session {session_id}: {result}")
+            
+            if result:
+                if 'rejection' in result:
+                    return f"[!] {result['rejection']}"
+                elif 'answer' in result:
+                    # Log telemetry
+                    telemetry.log_process_state_change(
+                        session_id=session_id,
+                        process="HostnameLookupProcess",
+                        from_state="running",
+                        to_state="completed"
+                    )
+                    return result['answer']
+            
+            return "Process completed but no result was generated."
+    
+    except Exception as e:
+        telemetry.log_error(
+            session_id=session_id,
+            error_code="PROCESS_ERROR",
+            error_message=str(e)
+        )
+        return f"[!] An error occurred: {str(e)}"
+
+
 @app.post("/api/query", response_model=QueryResponse)
 async def query_endpoint(request: QueryRequest):
     '''
@@ -200,6 +288,40 @@ async def query_endpoint(request: QueryRequest):
     except Exception as e:
         print(f"[!] Error processing query: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+
+
+@app.post("/api/hostname", response_model=HostnameResponse)
+async def hostname_endpoint(request: HostnameRequest):
+    '''
+    Look up hostname details and return the information.
+    
+    Args:
+        request: HostnameRequest containing the hostname to look up
+        
+    Returns:
+        HostnameResponse with the hostname details and session_id
+    '''
+    if not request.hostname or not request.hostname.strip():
+        raise HTTPException(status_code=400, detail="Hostname cannot be empty")
+    
+    # Generate unique session ID for this request
+    session_id = str(uuid.uuid4())[:8]
+    
+    try:
+        # Run the hostname lookup
+        response = await run_hostname_query(
+            hostname_query=request.hostname.strip(),
+            session_id=session_id
+        )
+        
+        return HostnameResponse(
+            response=response,
+            session_id=session_id
+        )
+    
+    except Exception as e:
+        print(f"[!] Error processing hostname lookup: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing hostname lookup: {str(e)}")
 
 
 @app.get("/", response_class=HTMLResponse)

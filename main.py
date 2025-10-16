@@ -17,6 +17,7 @@ from src.utils.store_factory import create_vector_store
 from src.utils.debug_config import debug_print
 from src.data.data_loader import SRMDataLoader
 from src.processes.srm_discovery_process import SRMDiscoveryProcess
+from src.processes.hostname_lookup_process import HostnameLookupProcess
 
 
 async def initialize_system():
@@ -164,6 +165,89 @@ async def run_query(
         return f"[!] An error occurred: {str(e)}"
 
 
+async def run_hostname_query(
+    kernel,
+    user_query: str,
+    session_id: str,
+    telemetry: TelemetryLogger
+) -> str:
+    '''
+    Run a hostname lookup query.
+    
+    Args:
+        kernel: Semantic Kernel instance
+        user_query: The hostname to look up
+        session_id: Session identifier
+        telemetry: Telemetry logger
+        
+    Returns:
+        The formatted hostname information
+    '''
+    # Create process
+    process_builder = HostnameLookupProcess.create_process(kernel)
+    kernel_process = process_builder.build()
+    
+    # Create initial event data with user_query and session_id
+    initial_data = {
+        "user_query": user_query,
+        "session_id": session_id,
+    }
+    
+    # Start process
+    telemetry.log_process_state_change(
+        session_id=session_id,
+        process="HostnameLookupProcess",
+        from_state="init",
+        to_state="running"
+    )
+    
+    try:
+        async with await start(
+            process=kernel_process,
+            kernel=kernel,
+            initial_event=KernelProcessEvent(
+                id=HostnameLookupProcess.ProcessEvents.StartProcess.value,
+                data=initial_data
+            ),
+        ) as process_context:
+            # Get final state
+            final_state = await process_context.get_state()
+            
+            # Debug: print state info
+            debug_print(f"DEBUG: Process completed. State: {type(final_state)}")
+            if hasattr(final_state, 'name'):
+                debug_print(f"DEBUG: Process name: {final_state.name}")
+            
+            # Retrieve result from global store
+            result = get_result(session_id)
+            clear_result(session_id)
+            
+            debug_print(f"DEBUG: Retrieved result for session {session_id}: {result}")
+            
+            if result:
+                if 'rejection' in result:
+                    return f"[!] {result['rejection']}"
+                elif 'answer' in result:
+                    # Log telemetry
+                    telemetry.log_process_state_change(
+                        session_id=session_id,
+                        process="HostnameLookupProcess",
+                        from_state="running",
+                        to_state="completed"
+                    )
+                    return result['answer']
+            
+            return "Process completed but no result was generated."
+    
+    except Exception as e:
+        telemetry.log_error(
+            session_id=session_id,
+            error_code="PROCESS_ERROR",
+            error_message=str(e)
+        )
+        return f"[!] An error occurred: {str(e)}"
+
+
 async def interactive_loop():
     '''
     Main interactive conversation loop.
@@ -174,14 +258,19 @@ async def interactive_loop():
     
     # Welcome message
     print("\n" + "="*60)
-    print("AI Concierge - SRM Discovery")
+    print("AI Concierge - SRM Discovery & Hostname Lookup")
     print("="*60)
-    print("\nWelcome! I can help you find the right Service Request Model (SRM)")
-    print("for your needs. Just describe what you're trying to accomplish.")
+    print("\nWelcome! I can help you with:")
+    print("1. Find the right Service Request Model (SRM) for your needs")
+    print("2. Look up hostname and server details")
     print("\nExamples:")
-    print("  - 'I need to expand storage on a file share'")
-    print("  - 'How do I restore deleted files?'")
-    print("  - 'Need to add more CPU to a VM'")
+    print("  SRM Discovery:")
+    print("    - 'I need to expand storage on a file share'")
+    print("    - 'How do I restore deleted files?'")
+    print("    - 'Need to add more CPU to a VM'")
+    print("\n  Hostname Lookup (use 'lookup:' or 'hostname:' prefix):")
+    print("    - 'lookup: srv-vmcap-001-prod'")
+    print("    - 'hostname: vmcap' (partial match)")
     print("\nType 'exit' to quit.\n")
     
     # Interactive loop
@@ -197,15 +286,38 @@ async def interactive_loop():
                 print("\nThanks for using AI Concierge! Goodbye.\n")
                 break
             
-            # Process query
+            # Check if this is a hostname lookup query
+            is_hostname_lookup = False
+            hostname_query = user_input
+            
+            if user_input.lower().startswith('lookup:') or user_input.lower().startswith('hostname:'):
+                is_hostname_lookup = True
+                # Extract the hostname from the prefix
+                if user_input.lower().startswith('lookup:'):
+                    hostname_query = user_input[7:].strip()
+                elif user_input.lower().startswith('hostname:'):
+                    hostname_query = user_input[9:].strip()
+            
+            # Process query based on type
             print("\n[*] Searching...\n")
-            response = await run_query(
-                kernel=kernel,
-                vector_store=vector_store,
-                user_query=user_input,
-                session_id=session_id,
-                telemetry=telemetry
-            )
+            
+            if is_hostname_lookup:
+                # Hostname lookup process
+                response = await run_hostname_query(
+                    kernel=kernel,
+                    user_query=hostname_query,
+                    session_id=session_id,
+                    telemetry=telemetry
+                )
+            else:
+                # SRM discovery process
+                response = await run_query(
+                    kernel=kernel,
+                    vector_store=vector_store,
+                    user_query=user_input,
+                    session_id=session_id,
+                    telemetry=telemetry
+                )
             
             # Display response
             print(f"Assistant:\n{response}\n")
