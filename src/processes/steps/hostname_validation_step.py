@@ -166,7 +166,7 @@ class HostnameValidationStep(KernelProcessStep):
             'empty': "Please provide a hostname to look up.",
             'too_long': "Hostname query is too long. Please provide a valid hostname (max 253 characters).",
             'invalid_characters': "Hostname contains invalid characters. Use only letters, numbers, hyphens, and dots.",
-            'natural_language': "It looks like you entered a full question. For IT service requests, use the main search (without 'lookup:' or 'hostname:' prefix).\n\nFor hostname lookups, use: lookup: <hostname>",
+            'natural_language': "It looks like you entered a full question. For IT service requests, use the main search (without 'lookup:' prefix).\n\nFor hostname lookups, use: lookup: <hostname>",
             'gibberish': "The hostname query doesn't appear to be valid. Please provide a valid hostname or partial hostname pattern.",
             'invalid_hostname': "The hostname query doesn't appear to be valid. Please provide a valid hostname or partial hostname pattern.",
         }

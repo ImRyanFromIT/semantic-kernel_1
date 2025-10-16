@@ -293,7 +293,8 @@ button, input, select, textarea {
     gap: 1rem;
 }
 
-.srm-card {
+.srm-card,
+.hostname-card {
     background-color: var(--card);
     border: 1px solid var(--card-border);
     border-radius: 8px;
@@ -306,24 +307,28 @@ button, input, select, textarea {
     to { opacity: 1; transform: translateY(0); }
 }
 
-.srm-card h2 {
+.srm-card h2,
+.hostname-card h2 {
     font-size: 1.25rem;
     color: var(--accent);
     margin-bottom: 0.75rem;
 }
 
-.srm-field {
+.srm-field,
+.hostname-field {
     margin: 0.75rem 0;
     line-height: 1.5;
 }
 
-.srm-field-label {
+.srm-field-label,
+.hostname-field-label {
     font-weight: 600;
     color: var(--muted);
     margin-right: 0.5rem;
 }
 
-.srm-field-value {
+.srm-field-value,
+.hostname-field-value {
     color: var(--text);
 }
 
@@ -370,13 +375,20 @@ button, input, select, textarea {
     color: var(--accent);
 }
 
-.srm-footer {
+.srm-footer,
+.hostname-footer {
     margin-top: 1.5rem;
     padding-top: 1rem;
     border-top: 1px solid var(--card-border);
     font-style: italic;
     color: var(--muted);
     font-size: 0.9rem;
+}
+
+.hostname-message {
+    white-space: pre-line;
+    text-align: left;
+    line-height: 1.6;
 }
 
 .empty-state {

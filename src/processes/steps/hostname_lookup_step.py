@@ -27,6 +27,7 @@ class HostnameLookupStep(KernelProcessStep):
         '''Output events from the hostname lookup step.'''
         ExactMatchFound = "ExactMatchFound"
         MultipleMatchesFound = "MultipleMatchesFound"
+        PartialMatchesFound = "PartialMatchesFound"
         NoMatchFound = "NoMatchFound"
     
     def _get_search_clients(self):
@@ -149,8 +150,38 @@ class HostnameLookupStep(KernelProcessStep):
                     )
                     return
             
-            # No exact matches found
-            debug_print(f"DEBUG HostnameLookupStep: No exact match found for '{user_query}'")
+            # No exact matches found - try partial matching as fallback
+            debug_print(f"DEBUG HostnameLookupStep: No exact match found for '{user_query}', trying partial match")
+            partial_matches = await self._search_machines(machines_client, user_query, exact=False)
+            
+            # Limit to top 5 results
+            partial_matches = partial_matches[:5]
+            
+            debug_print(f"DEBUG HostnameLookupStep: Found {len(partial_matches)} partial matches for '{user_query}'")
+            
+            if len(partial_matches) > 0:
+                # Enrich partial matches with team info
+                enriched_partial_matches = []
+                for machine in partial_matches:
+                    hostname_record = await self._enrich_with_team_info(team_client, machine)
+                    if hostname_record:
+                        enriched_partial_matches.append(hostname_record)
+                
+                if len(enriched_partial_matches) > 0:
+                    debug_print(f"DEBUG HostnameLookupStep: Found {len(enriched_partial_matches)} partial matches with team info")
+                    await context.emit_event(
+                        process_event=self.OutputEvents.PartialMatchesFound.value,
+                        data={
+                            "hostname_records": enriched_partial_matches,
+                            "user_query": user_query,
+                            "session_id": session_id,
+                            "is_partial": True,
+                        }
+                    )
+                    return
+            
+            # No matches found at all (exact or partial)
+            debug_print(f"DEBUG HostnameLookupStep: No matches found for '{user_query}'")
             await context.emit_event(
                 process_event=self.OutputEvents.NoMatchFound.value,
                 data={

@@ -103,17 +103,25 @@ class HostnameFormatStep(KernelProcessStep):
         '''
         hostname_records = input_data.get('hostname_records', [])
         user_query = input_data.get('user_query', '')
+        is_partial = input_data.get('is_partial', False)
         
         debug_print(f"DEBUG HostnameFormatStep: Formatting {len(hostname_records)} matches for session '{session_id}'")
         
-        # Format the response
-        response = f"**Multiple matches found for '{user_query}' ({len(hostname_records)} results)**\n\n"
-        response += "Please be more specific. Here are the matching hostnames:\n\n"
+        # Format the response based on whether matches are partial or exact
+        if is_partial:
+            response = f"**Partial matches found for '{user_query}' ({len(hostname_records)} results)**\n\n"
+            response += "Here are the matching hostnames:\n\n"
+        else:
+            response = f"**Multiple matches found for '{user_query}' ({len(hostname_records)} results)**\n\n"
+            response += "Please be more specific. Here are the matching hostnames:\n\n"
         
         for record in hostname_records:
-            response += f"- **{record.hostname}** ({record.application_name})\n"
+            response += f"- **{record.hostname}** ({record.application_name}) - {record.maintenance_window}\n"
         
-        response += "\n*Tip: Use the exact hostname for detailed information.*"
+        if is_partial:
+            response += "\n*Tip: Try using the exact hostname for best results.*"
+        else:
+            response += "\n*Tip: Use the exact hostname for detailed information.*"
         
         # Store result
         store_result(session_id, {

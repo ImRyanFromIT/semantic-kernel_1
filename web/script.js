@@ -3,18 +3,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DATA ---
     const i18n = {
         en: {
-            problemLabel: "Describe your problem",
-            helperText: "Be as specific as possible.",
+            problemLabel: "Describe your problem or lookup a hostname",
+            helperText: "For SRM: describe your problem. For hostname: use 'lookup:' prefix.",
             search: "Search",
             searching: "Searching...",
             searchingMessage: "Searching for the right SRM...",
+            searchingHostnameMessage: "Looking up hostname information...",
             suggestions: [
                 "Expand storage on a file share",
                 "Restore deleted files",
-                "Add more CPU to a VM"
+                "Add more CPU to a VM",
+                "lookup: srv-vmcap-001-prod",
+                "lookup: aiopsdi"
             ],
             resultFound: "1 result found.",
             firstResult: "The result is",
+            hostnameFound: "Hostname information found.",
             noResultsTitle: "No matching Connector found",
             noResultsBody: "Your request will be routed to a general queue. Please submit it and a team member will assist you.",
             connectionError: "Connection Error",
@@ -25,18 +29,22 @@ document.addEventListener('DOMContentLoaded', () => {
             themeDark: "Dark"
         },
         es: {
-            problemLabel: "Describa su problema",
-            helperText: "Sea lo más específico posible.",
+            problemLabel: "Describa su problema o busque un hostname",
+            helperText: "Para SRM: describa su problema. Para hostname: use el prefijo 'lookup:'.",
             search: "Buscar",
             searching: "Buscando...",
             searchingMessage: "Buscando el SRM correcto...",
+            searchingHostnameMessage: "Buscando información del hostname...",
             suggestions: [
                 "Ampliar almacenamiento",
                 "Restaurar archivos",
-                "Añadir más CPU a una VM"
+                "Añadir más CPU a una VM",
+                "lookup: srv-vmcap-001-prod",
+                "lookup: aiopsdi"
             ],
             resultFound: "1 resultado encontrado.",
             firstResult: "El resultado es",
+            hostnameFound: "Información del hostname encontrada.",
             noResultsTitle: "No se encontró ningún Conector coincidente",
             noResultsBody: "Su solicitud se enviará a una cola general. Envíela y un miembro del equipo le ayudará.",
             connectionError: "Error de conexión",
@@ -69,12 +77,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return temp.innerHTML;
     };
     
-    const realBackendSearch = async (query) => {
+    const callBackend = async (endpoint, payload) => {
         try {
-            const response = await fetch('/api/query', {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query })
+                body: JSON.stringify(payload)
             });
             
             if (!response.ok) {
@@ -82,12 +90,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const data = await response.json();
-            return data.response; // Returns markdown string
+            return data.response;
         } catch (error) {
-            console.error('Backend search error:', error);
+            console.error('Backend error:', error);
             throw error;
         }
     };
+    
+    const realBackendSearch = async (query) => callBackend('/api/query', { query });
+    const realBackendHostnameSearch = async (hostname) => callBackend('/api/hostname', { hostname });
     
     const parseMarkdownResponse = (markdown) => {
         // Handle special response types
@@ -153,6 +164,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         return result;
+    };
+    
+    const parseHostnameResponse = (markdown) => {
+        // Handle special response types
+        if (markdown.startsWith('[!]')) {
+            return { type: 'error', message: markdown.substring(3).trim() };
+        }
+        
+        // Check if it's a single hostname match
+        if (markdown.includes('## Hostname Details')) {
+            const hostnameMatch = markdown.match(/\*\*Hostname:\*\*\s+(.+)/);
+            const applicationMatch = markdown.match(/\*\*Application:\*\*\s+(.+)/);
+            const maintenanceMatch = markdown.match(/\*\*Maintenance Window:\*\*\s+(.+)/);
+            const teamMatch = markdown.match(/\*\*Team:\*\*\s+(.+)/);
+            const contactMatch = markdown.match(/\*\*Contact:\*\*\s+(.+)/);
+            
+            if (hostnameMatch) {
+                return {
+                    type: 'hostname_success',
+                    hostname: hostnameMatch[1].trim(),
+                    application: applicationMatch ? applicationMatch[1].trim() : '',
+                    maintenanceWindow: maintenanceMatch ? maintenanceMatch[1].trim() : '',
+                    team: teamMatch ? teamMatch[1].trim() : '',
+                    contact: contactMatch ? contactMatch[1].trim() : ''
+                };
+            }
+        }
+        
+        // Check for multiple matches
+        if (markdown.includes('Multiple matches found')) {
+            return { type: 'hostname_multiple', message: markdown };
+        }
+        
+        // Check for no match
+        if (markdown.includes('No hostname found')) {
+            return { type: 'hostname_not_found', message: markdown };
+        }
+        
+        // Default: treat as plain message
+        return { type: 'hostname_info', message: markdown };
     };
 
     const renderResults = (parsedResult) => {
@@ -274,9 +325,70 @@ document.addEventListener('DOMContentLoaded', () => {
         list.appendChild(listItem);
         resultsContainer.appendChild(list);
 
-        const announcement = `${i18n[currentLocale].firstResult} ${parsedResult.name}.`;
-        srAnnouncer.textContent = announcement;
+        announce(`${i18n[currentLocale].firstResult} ${parsedResult.name}.`);
+    };
+    
+    const renderEmptyState = (title, message, testId = 'empty-state') => {
+        resultsContainer.innerHTML = `
+            <div class="empty-state" data-testid="${testId}">
+                ${title ? `<h3>${title}</h3>` : ''}
+                <p>${sanitize(message).replace(/\n/g, '<br>')}</p>
+            </div>
+        `;
+    };
+    
+    const announce = (message) => {
+        srAnnouncer.textContent = message;
         setTimeout(() => srAnnouncer.textContent = '', 1000);
+    };
+    
+    const renderField = (label, value, cssClass = 'hostname') => {
+        if (!value) return '';
+        return `
+            <div class="${cssClass}-field">
+                <span class="${cssClass}-field-label">${label}:</span>
+                <span class="${cssClass}-field-value">${sanitize(value)}</span>
+            </div>
+        `;
+    };
+    
+    const renderHostnameResults = (parsedResult) => {
+        resultsContainer.innerHTML = '';
+        
+        // Handle error states
+        if (parsedResult.type === 'error') {
+            return renderEmptyState('Error', parsedResult.message, 'error-state');
+        }
+        
+        // Handle info/multiple/not found states
+        if (['hostname_multiple', 'hostname_not_found', 'hostname_info'].includes(parsedResult.type)) {
+            return renderEmptyState('', parsedResult.message, 'hostname-info-state');
+        }
+        
+        // Render successful hostname result
+        const fields = [
+            { label: 'Application', value: parsedResult.application },
+            { label: 'Maintenance Window', value: parsedResult.maintenanceWindow },
+            { label: 'Team', value: parsedResult.team },
+            { label: 'Contact', value: parsedResult.contact }
+        ];
+        
+        const cardContent = `
+            <h2 data-testid="hostname-name">${sanitize(parsedResult.hostname)}</h2>
+            ${fields.map(f => renderField(f.label, f.value)).join('')}
+            <p class="hostname-footer">For questions about this system, contact the team listed above.</p>
+        `;
+        
+        resultsContainer.innerHTML = `
+            <h2 class="visually-hidden">${i18n[currentLocale].hostnameFound}</h2>
+            <ul class="results-list" role="list">
+                <li class="hostname-card" role="listitem" data-testid="hostname-card-result">
+                    ${cardContent}
+                </li>
+            </ul>
+        `;
+
+        announce(`${i18n[currentLocale].hostnameFound} ${parsedResult.hostname}.`);
     };
     
     const updateUIStrings = () => {
@@ -310,39 +422,59 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const detectQueryType = (query) => {
+        const lowerQuery = query.toLowerCase();
+        const prefix = 'lookup:';
+        const prefixLength = 7;
+        
+        if (lowerQuery.startsWith(prefix)) {
+            return { isHostname: true, query: query.substring(prefixLength).trim() };
+        }
+        return { isHostname: false, query: query.trim() };
+    };
+    
+    const setLoadingState = (isLoading, isHostname = false) => {
+        searchBtn.setAttribute('aria-busy', isLoading);
+        resultsContainer.setAttribute('aria-busy', isLoading);
+        searchBtn.disabled = isLoading;
+        searchBtn.textContent = isLoading ? i18n[currentLocale].searching : i18n[currentLocale].search;
+        searchBtn.classList.toggle('searching', isLoading);
+        
+        if (isLoading) {
+            const message = isHostname ? 
+                i18n[currentLocale].searchingHostnameMessage : 
+                i18n[currentLocale].searchingMessage;
+            
+            resultsContainer.innerHTML = `
+                <div class="loading-state" data-testid="loading-state">
+                    <div class="spinner"></div>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    };
+    
     const runSearch = async (query) => {
         if (!query.trim()) return;
 
-        // Store original button text
+        const { isHostname, query: processedQuery } = detectQueryType(query);
         const originalButtonText = searchBtn.textContent;
         
-        // Set loading state
-        searchBtn.setAttribute('aria-busy', 'true');
-        resultsContainer.setAttribute('aria-busy', 'true');
-        searchBtn.disabled = true;
-        searchBtn.textContent = i18n[currentLocale].searching;
-        searchBtn.classList.add('searching');
-        
-        // Show loading indicator in results
-        resultsContainer.innerHTML = `
-            <div class="loading-state" data-testid="loading-state">
-                <div class="spinner"></div>
-                <p>${i18n[currentLocale].searchingMessage}</p>
-            </div>
-        `;
+        setLoadingState(true, isHostname);
         
         try {
-            const markdown = await realBackendSearch(query);
-            const parsedResult = parseMarkdownResponse(markdown);
-            renderResults(parsedResult);
+            const markdown = isHostname 
+                ? await realBackendHostnameSearch(processedQuery)
+                : await realBackendSearch(query);
+            
+            const parsedResult = isHostname 
+                ? parseHostnameResponse(markdown)
+                : parseMarkdownResponse(markdown);
+            
+            isHostname ? renderHostnameResults(parsedResult) : renderResults(parsedResult);
         } catch (error) {
             console.error('Search error:', error);
-            resultsContainer.innerHTML = `
-                <div class="empty-state" data-testid="error-state">
-                    <h3>${i18n[currentLocale].connectionError}</h3>
-                    <p>${i18n[currentLocale].connectionErrorBody}</p>
-                </div>
-            `;
+            renderEmptyState(i18n[currentLocale].connectionError, i18n[currentLocale].connectionErrorBody, 'error-state');
         } finally {
             searchBtn.setAttribute('aria-busy', 'false');
             resultsContainer.setAttribute('aria-busy', 'false');

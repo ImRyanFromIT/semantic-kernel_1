@@ -81,6 +81,11 @@ class HostnameLookupProcess:
             HostnameLookupStep.OutputEvents.MultipleMatchesFound.value
         ).send_event_to(format_step, parameter_name="input_data")
         
+        # HostnameLookupStep -> HostnameFormatStep (partial matches)
+        lookup_step.on_event(
+            HostnameLookupStep.OutputEvents.PartialMatchesFound.value
+        ).send_event_to(format_step, parameter_name="input_data")
+        
         # HostnameLookupStep -> HostnameFormatStep (no match)
         lookup_step.on_event(
             HostnameLookupStep.OutputEvents.NoMatchFound.value

@@ -268,9 +268,9 @@ async def interactive_loop():
     print("    - 'I need to expand storage on a file share'")
     print("    - 'How do I restore deleted files?'")
     print("    - 'Need to add more CPU to a VM'")
-    print("\n  Hostname Lookup (use 'lookup:' or 'hostname:' prefix):")
+    print("\n  Hostname Lookup (use 'lookup:' prefix):")
     print("    - 'lookup: srv-vmcap-001-prod'")
-    print("    - 'hostname: vmcap' (partial match)")
+    print("    - 'lookup: vmcap' (partial match)")
     print("\nType 'exit' to quit.\n")
     
     # Interactive loop
