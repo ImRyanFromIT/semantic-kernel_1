@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "description": "Validates hostname queries to ensure they are appropriate for hostname lookup",
+  "execution_settings": {
+    "default": {
+      "max_tokens": 50,
+      "temperature": 0.0,
+      "top_p": 1.0
+    }
+  },
+  "input_variables": [
+    {
+      "name": "hostname_query",
+      "description": "The hostname query to validate",
+      "required": true
+    }
+  ],
+  "output_variable": {
+    "description": "Validation result: 'VALID' or 'INVALID: <reason>'"
+  }
+}
+

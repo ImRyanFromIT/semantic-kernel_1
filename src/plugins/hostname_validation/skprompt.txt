@@ -1,0 +1,101 @@
+# Task Description
+
+Analyze the hostname query and determine if it's a valid hostname lookup request.
+
+This system handles hostname lookups for IT infrastructure machines. Users can search by exact hostname or partial hostname patterns.
+
+# Classification Rules
+
+**VALID** - Input is a valid hostname query:
+- Full hostnames (e.g., "srv-vmcap-001-prod", "srv-aiopsdi-005-test")
+- Partial hostname patterns (e.g., "vmcap", "aiops", "splunk")
+- Hostname components (e.g., "prod", "dev", "test")
+- Contains alphanumeric characters, hyphens, underscores, or dots
+- May have slight typos but resembles a hostname structure
+- Short abbreviations that could be part of a hostname
+
+**INVALID** - Input is not a valid hostname query:
+- Empty or whitespace only
+- Excessive length (> 253 characters)
+- Contains unusual special characters not found in hostnames (e.g., <, >, {, }, |, \, ^, ~, [, ], `, @, #, $, %, &, *, =, +)
+- Obvious gibberish with no hostname-like structure
+- SQL injection attempts or code patterns
+- Multiple sentences or natural language queries (should use SRM search instead)
+- Excessive repetition with no pattern match
+
+# Important Guidelines
+
+1. Be LENIENT - hostnames can have various formats
+2. Allow partial matches - users often search by component (e.g., "vmcap" to find all VM capacity servers)
+3. Allow common hostname patterns: server names, environment indicators (prod/dev/test), application names
+4. Reject only obvious non-hostname patterns or malicious input
+5. Short queries (2-5 chars) are acceptable for partial matches
+
+# Output Format
+
+Return ONLY one of these:
+- "VALID" - for valid hostname queries
+- "INVALID: empty" - for empty or whitespace input
+- "INVALID: too_long" - for input exceeding 253 characters
+- "INVALID: invalid_characters" - for suspicious special characters
+- "INVALID: natural_language" - for full sentences (suggest SRM search)
+- "INVALID: gibberish" - for obvious random characters
+
+# Examples
+
+Input: "srv-vmcap-001-prod"
+Output: VALID
+
+Input: "vmcap"
+Output: VALID
+
+Input: "aiops"
+Output: VALID
+
+Input: "srv-clntvpn-005-test"
+Output: VALID
+
+Input: "splunk-prod"
+Output: VALID
+
+Input: "dev"
+Output: VALID
+
+Input: "prod-01"
+Output: VALID
+
+Input: ""
+Output: INVALID: empty
+
+Input: "I need to expand storage on a file share"
+Output: INVALID: natural_language
+
+Input: "<script>alert('xss')</script>"
+Output: INVALID: invalid_characters
+
+Input: "SELECT * FROM machines WHERE name = 'test'"
+Output: INVALID: invalid_characters
+
+Input: "asdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnm"
+Output: VALID
+
+Input: "!!!!!!!!!!"
+Output: INVALID: gibberish
+
+Input: "{test}"
+Output: INVALID: invalid_characters
+
+Input: "srv|test"
+Output: INVALID: invalid_characters
+
+Input: "test@host"
+Output: INVALID: invalid_characters
+
+# User Input
+
+{{$hostname_query}}
+
+# Validation Result
+
+
+
