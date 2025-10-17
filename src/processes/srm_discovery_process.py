@@ -49,12 +49,14 @@ class SRMDiscoveryProcess:
             ProcessBuilder configured with all steps and transitions
             
         Note:
-            Kernel and vector_store are passed via initial_event data
+            Kernel and vector_store are passed via initial_event data due to 
+            SK ProcessBuilder constraints (requires class types, not instances).
         '''
         # Create process builder
         process_builder = ProcessBuilder(name=process_name)
         
-        # Add steps (kernel will be available through process context)
+        # Add steps - SK ProcessBuilder requires class types, not instances
+        # Dependencies will be passed through initial event and cached in steps
         validation_step = process_builder.add_step(ValidationStep)
         clarity_step = process_builder.add_step(ClarityStep)
         retrieval_step = process_builder.add_step(RetrievalStep)
@@ -62,7 +64,7 @@ class SRMDiscoveryProcess:
         answer_step = process_builder.add_step(AnswerStep)
         
         # Process start -> ValidationStep
-        # The initial event data will contain user_query, vector_store, session_id as a dict
+        # The initial event data will contain user_query and session_id
         process_builder.on_input_event(
             SRMDiscoveryProcess.ProcessEvents.StartProcess.value
         ).send_event_to(validation_step, parameter_name="input_data")

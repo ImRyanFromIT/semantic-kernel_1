@@ -2,6 +2,7 @@
 Hostname validation step - LLM-based validation for hostname queries.
 '''
 
+import logging
 from enum import Enum
 
 from semantic_kernel import Kernel
@@ -11,17 +12,22 @@ from semantic_kernel.processes.kernel_process import (
     KernelProcessStepContext,
     KernelProcessEventVisibility,
 )
-
-from src.utils.debug_config import debug_print
-from src.utils.result_store import store_result
+from semantic_kernel.processes.kernel_process.kernel_process_step_metadata import kernel_process_step_metadata
 
 
+# Configure logger
+logger = logging.getLogger(__name__)
+
+
+@kernel_process_step_metadata("HostnameValidationStep.V1")
 class HostnameValidationStep(KernelProcessStep):
     '''
     Process step to validate hostname queries using LLM.
     
     Uses semantic kernel to invoke the hostname_validation plugin
     to intelligently validate hostname queries.
+    
+    Note: Kernel is passed through event data due to SK ProcessBuilder constraints.
     '''
     
     class OutputEvents(Enum):
@@ -45,26 +51,24 @@ class HostnameValidationStep(KernelProcessStep):
         user_query = input_data.get('user_query', '').strip()
         session_id = input_data.get('session_id', '')
         kernel = input_data.get('kernel')
+        result_container = input_data.get('result_container', {})
         
-        debug_print(f"DEBUG HostnameValidationStep: Validating hostname query for session {session_id}")
-        debug_print(f"DEBUG HostnameValidationStep: Query: '{user_query}'")
+        logger.info("Validating hostname query", extra={"session_id": session_id, "query": user_query})
         
-        # Use LLM to validate the hostname query - get kernel from input_data
+        # Use LLM to validate the hostname query using kernel from input_data
         is_valid, rejection_reason = await self._validate_with_llm(user_query, kernel)
         
         if not is_valid:
-            debug_print(f"DEBUG HostnameValidationStep: Input rejected - {rejection_reason}")
+            logger.warning("Hostname query rejected", extra={"session_id": session_id, "reason": rejection_reason})
             
             # Format rejection message based on reason
             rejection_message = self._format_rejection_message(rejection_reason)
             
-            # Store rejection result
-            store_result(session_id, {
-                'rejection': rejection_message,
-                'reason': rejection_reason
-            })
+            # Store result in container for entry point to retrieve
+            result_container['rejection_message'] = rejection_message
+            result_container['rejection_reason'] = rejection_reason
             
-            # Emit rejection event
+            # Emit rejection event with answer data
             await context.emit_event(
                 process_event=self.OutputEvents.InputRejected.value,
                 data={
@@ -76,12 +80,17 @@ class HostnameValidationStep(KernelProcessStep):
                 visibility=KernelProcessEventVisibility.Public
             )
         else:
-            debug_print(f"DEBUG HostnameValidationStep: Input is valid")
+            logger.info("Hostname query validated successfully", extra={"session_id": session_id})
             
-            # Pass through to next step (include kernel for subsequent steps)
+            # Pass through to next step with dependencies
             await context.emit_event(
                 process_event=self.OutputEvents.InputValid.value,
-                data=input_data,  # kernel is already in input_data
+                data={
+                    "user_query": user_query,
+                    "session_id": session_id,
+                    "kernel": kernel,
+                    "result_container": result_container,
+                },
             )
     
     async def _validate_with_llm(self, hostname_query: str, kernel: Kernel) -> tuple[bool, str]:
@@ -96,7 +105,7 @@ class HostnameValidationStep(KernelProcessStep):
             Tuple of (is_valid, rejection_reason)
         '''
         if not kernel:
-            debug_print("DEBUG HostnameValidationStep: No kernel available for LLM validation")
+            logger.debug("No kernel available for LLM validation, failing open")
             return True, ''  # Fail open if no kernel
         
         try:
@@ -110,7 +119,7 @@ class HostnameValidationStep(KernelProcessStep):
                 hostname_query=hostname_query
             )
             
-            debug_print(f"DEBUG HostnameValidationStep: LLM validation result: {validation_result}")
+            logger.debug("LLM validation result received", extra={"result": validation_result})
             
             if validation_result.startswith('INVALID'):
                 # Extract the reason from the validation result
@@ -120,7 +129,7 @@ class HostnameValidationStep(KernelProcessStep):
             return True, ''
             
         except Exception as e:
-            debug_print(f"DEBUG HostnameValidationStep: Error in LLM validation: {e}")
+            logger.warning("Error in LLM validation, failing open", extra={"error": str(e)})
             # Fail open - allow input if LLM check fails
             return True, ''
     

@@ -43,13 +43,14 @@ class HostnameLookupProcess:
             ProcessBuilder configured with all steps and transitions
             
         Note:
-            Kernel is passed via initial_event data,
-            not during process construction.
+            Kernel is passed via initial_event data due to SK ProcessBuilder 
+            constraints (requires class types, not instances).
         '''
         # Create process builder
         process_builder = ProcessBuilder(name=process_name)
         
-        # Add steps (kernel will be available through process context)
+        # Add steps - SK ProcessBuilder requires class types, not instances
+        # Dependencies will be passed through initial event and cached in steps
         validation_step = process_builder.add_step(HostnameValidationStep)
         lookup_step = process_builder.add_step(HostnameLookupStep)
         format_step = process_builder.add_step(HostnameFormatStep)

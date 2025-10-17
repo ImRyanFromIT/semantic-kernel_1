@@ -3,21 +3,28 @@ Rerank step - Use LLM to semantically score and select the best SRM recommendati
 '''
 
 import json
+import logging
 from enum import Enum
 
 from semantic_kernel import Kernel
 from semantic_kernel.functions import kernel_function
 from semantic_kernel.processes.kernel_process import KernelProcessStep, KernelProcessStepContext
+from semantic_kernel.processes.kernel_process.kernel_process_step_metadata import kernel_process_step_metadata
 
-from src.utils.debug_config import debug_print
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
+@kernel_process_step_metadata("RerankStep.V1")
 class RerankStep(KernelProcessStep):
     '''
     Process step to rerank candidates using LLM-based semantic scoring.
     
     This step uses an LLM to analyze each candidate's relevance to the user query
     and selects the top recommendations based on semantic understanding.
+    
+    Note: Kernel is passed through event data due to SK ProcessBuilder constraints.
     '''
     
     class OutputEvents(Enum):
@@ -35,21 +42,21 @@ class RerankStep(KernelProcessStep):
         
         Args:
             context: Process step context
-            input_data: Dictionary containing candidates, user_query, vector_store, session_id
+            input_data: Dictionary containing candidates, user_query, session_id
         '''
         # Extract data from input
         candidates = input_data.get('candidates', [])
         user_query = input_data.get('user_query', '')
-        vector_store = input_data.get('vector_store')
         session_id = input_data.get('session_id', '')
-        
-        debug_print(f"DEBUG RerankStep: Called with {len(candidates) if candidates else 0} candidates, session_id='{session_id}'")
-        
-        # Get kernel from input_data
+        vector_store = input_data.get('vector_store')
         kernel = input_data.get('kernel')
+        result_container = input_data.get('result_container', {})
+        
+        logger.info("Reranking candidates", extra={"session_id": session_id, "candidate_count": len(candidates) if candidates else 0})
         
         if not candidates:
             # No candidates to rerank
+            logger.warning("No candidates to rerank", extra={"session_id": session_id})
             await context.emit_event(
                 process_event=self.OutputEvents.RecommendationSelected.value,
                 data={
@@ -57,20 +64,22 @@ class RerankStep(KernelProcessStep):
                     "confidence": 0.0,
                     "alternatives": [],
                     "user_query": user_query,
-                    "vector_store": vector_store,
                     "session_id": session_id,
+                    "vector_store": vector_store,
                     "kernel": kernel,
+                    "result_container": result_container,
                 },
             )
             return
         
-        # Use LLM to score candidates - get kernel from input_data
+        # Use LLM to score candidates using kernel from input_data
         scored_candidates = await self._llm_score_candidates(candidates, user_query, kernel)
         
         # Sort by LLM score
         scored_candidates.sort(key=lambda x: x['llm_score'], reverse=True)
         
-        debug_print(f"DEBUG RerankStep: Top 3 scores: {[c['llm_score'] for c in scored_candidates[:3]]}")
+        top_scores = [c['llm_score'] for c in scored_candidates[:3]]
+        logger.debug("Candidates ranked", extra={"session_id": session_id, "top_3_scores": top_scores})
         
         # Select top recommendation
         top_candidate = scored_candidates[0]
@@ -78,7 +87,9 @@ class RerankStep(KernelProcessStep):
         # Determine confidence based on LLM score
         confidence = self._calculate_confidence(scored_candidates)
         
-        # Emit event with all necessary data
+        logger.info("Recommendation selected", extra={"session_id": session_id, "top_srm": top_candidate['name'], "confidence": confidence})
+        
+        # Emit event with dependencies
         await context.emit_event(
             process_event=self.OutputEvents.RecommendationSelected.value,
             data={
@@ -87,9 +98,10 @@ class RerankStep(KernelProcessStep):
                 "alternatives": scored_candidates[1:3],  # Always include 2 alternatives
                 "ranked_candidates": scored_candidates[:3],
                 "user_query": user_query,
-                "vector_store": vector_store,
                 "session_id": session_id,
+                "vector_store": vector_store,
                 "kernel": kernel,
+                "result_container": result_container,
             }
         )
     
@@ -126,7 +138,7 @@ class RerankStep(KernelProcessStep):
             )
             
             result_text = str(result).strip()
-            debug_print(f"DEBUG RerankStep: LLM response: {result_text[:200]}...")
+            logger.debug("LLM reranking response received", extra={"response_preview": result_text[:200]})
             
             # Parse JSON response
             rankings_data = json.loads(result_text)
@@ -146,7 +158,7 @@ class RerankStep(KernelProcessStep):
                     candidate['llm_reasoning'] = 'No score provided'
             
         except Exception as e:
-            debug_print(f"DEBUG RerankStep: LLM scoring failed: {e}")
+            logger.warning("LLM scoring failed, falling back to BM25 scores", extra={"error": str(e)})
             # Fallback to original BM25 scores normalized to 0-100
             for candidate in candidates:
                 # Normalize BM25 score (typically 0-10) to 0-100

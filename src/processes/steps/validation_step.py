@@ -5,6 +5,7 @@ This step checks for basic input validation (length, patterns) and uses
 LLM-based content filtering to detect junk, spam, and gibberish.
 '''
 
+import logging
 import re
 from enum import Enum
 
@@ -15,9 +16,11 @@ from semantic_kernel.processes.kernel_process import (
     KernelProcessStepContext,
     KernelProcessEventVisibility,
 )
+from semantic_kernel.processes.kernel_process.kernel_process_step_metadata import kernel_process_step_metadata
 
-from src.utils.debug_config import debug_print
 
+# Configure logger
+logger = logging.getLogger(__name__)
 
 # Validation configuration constants
 MIN_LENGTH = 3
@@ -26,6 +29,7 @@ MAX_SPECIAL_CHAR_RATIO = 0.3
 MAX_REPETITION_COUNT = 5
 
 
+@kernel_process_step_metadata("ValidationStep.V1")
 class ValidationStep(KernelProcessStep):
     '''
     Process step to validate user input against guardrails.
@@ -34,6 +38,8 @@ class ValidationStep(KernelProcessStep):
     1. Length validation (min/max bounds)
     2. Character pattern analysis (special chars, repetition)
     3. LLM-based content filtering (gibberish, spam detection)
+    
+    Note: Kernel is passed through event data due to SK ProcessBuilder constraints.
     '''
     
     class OutputEvents(Enum):
@@ -58,26 +64,19 @@ class ValidationStep(KernelProcessStep):
         vector_store = input_data.get('vector_store')
         session_id = input_data.get('session_id', '')
         kernel = input_data.get('kernel')
+        result_container = input_data.get('result_container', {})
         
-        debug_print(f"DEBUG ValidationStep: Validating input for session {session_id}")
-        debug_print(f"DEBUG ValidationStep: Query length: {len(user_query)}")
+        logger.info("Validating input", extra={"session_id": session_id, "query_length": len(user_query)})
         
-        # Run validation checks - get kernel from input_data
+        # Run validation checks - kernel from input_data
         is_valid, rejection_reason = await self._run_validation_checks(user_query, kernel)
         
         if not is_valid:
-            debug_print(f"DEBUG ValidationStep: Input rejected - {rejection_reason}")
+            logger.warning("Input rejected", extra={"session_id": session_id, "reason": rejection_reason})
             
             # Format rejection message
             from src.utils.rejection_responses import format_rejection_response
             rejection_message = format_rejection_response(rejection_reason)
-            
-            # Store result in global store
-            from src.utils.result_store import store_result
-            store_result(session_id, {
-                'rejection': rejection_message,
-                'reason': rejection_reason,
-            })
             
             # Log rejection to telemetry
             from src.utils.telemetry import TelemetryLogger
@@ -88,7 +87,11 @@ class ValidationStep(KernelProcessStep):
                 rejection_reason=rejection_reason
             )
             
-            # Emit rejection event
+            # Store result in container for entry point to retrieve
+            result_container['rejection_message'] = rejection_message
+            result_container['rejection_reason'] = rejection_reason
+            
+            # Emit rejection event with business data only
             await context.emit_event(
                 process_event=self.OutputEvents.InputRejected.value,
                 data={
@@ -100,12 +103,18 @@ class ValidationStep(KernelProcessStep):
                 visibility=KernelProcessEventVisibility.Public
             )
         else:
-            debug_print(f"DEBUG ValidationStep: Input validated successfully")
+            logger.info("Input validated successfully", extra={"session_id": session_id})
             
-            # Pass through to next step (include kernel for subsequent steps)
+            # Pass through to next step with dependencies
             await context.emit_event(
                 process_event=self.OutputEvents.InputValid.value,
-                data=input_data,  # kernel is already in input_data
+                data={
+                    "user_query": user_query,
+                    "vector_store": vector_store,
+                    "session_id": session_id,
+                    "kernel": kernel,
+                    "result_container": result_container,
+                },
             )
     
     async def _run_validation_checks(self, user_query: str, kernel: Kernel) -> tuple[bool, str]:
@@ -137,9 +146,7 @@ class ValidationStep(KernelProcessStep):
             if not content_valid:
                 return False, content_reason
         except Exception as e:
-            debug_print(f"DEBUG ValidationStep: LLM validation failed: {e}")
-            # If LLM check fails, allow the input (fail open)
-            debug_print("DEBUG ValidationStep: Failing open - allowing input")
+            logger.warning("LLM validation failed, failing open", extra={"error": str(e)})
         
         return True, ''
     
@@ -205,7 +212,7 @@ class ValidationStep(KernelProcessStep):
             Tuple of (is_valid, rejection_reason)
         '''
         if not kernel:
-            debug_print("DEBUG ValidationStep: No kernel available for LLM validation")
+            logger.debug("No kernel available for LLM validation, failing open")
             return True, ''  # Fail open if no kernel
         
         try:
@@ -219,7 +226,7 @@ class ValidationStep(KernelProcessStep):
                 user_input=user_query
             )
             
-            debug_print(f"DEBUG ValidationStep: LLM validation result: {validation_result}")
+            logger.debug("LLM validation result received", extra={"result": validation_result})
             
             if validation_result.startswith('INVALID'):
                 # Map LLM reason to our rejection categories
@@ -230,7 +237,7 @@ class ValidationStep(KernelProcessStep):
             return True, ''
             
         except Exception as e:
-            debug_print(f"DEBUG ValidationStep: Error in LLM validation: {e}")
+            logger.warning("Error in LLM validation, failing open", extra={"error": str(e)})
             # Fail open - allow input if LLM check fails
             return True, ''
 

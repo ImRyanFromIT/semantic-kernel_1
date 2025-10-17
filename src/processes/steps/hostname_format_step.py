@@ -2,15 +2,23 @@
 Hostname format step - Format hostname lookup results for display.
 '''
 
+import logging
 from enum import Enum
 
 from semantic_kernel.functions import kernel_function
-from semantic_kernel.processes.kernel_process import KernelProcessStep, KernelProcessStepContext
+from semantic_kernel.processes.kernel_process import (
+    KernelProcessStep,
+    KernelProcessStepContext,
+    KernelProcessEventVisibility,
+)
+from semantic_kernel.processes.kernel_process.kernel_process_step_metadata import kernel_process_step_metadata
 
-from src.utils.debug_config import debug_print
-from src.utils.result_store import store_result
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
+@kernel_process_step_metadata("HostnameFormatStep.V1")
 class HostnameFormatStep(KernelProcessStep):
     '''
     Process step to format hostname lookup results.
@@ -38,23 +46,25 @@ class HostnameFormatStep(KernelProcessStep):
             input_data: Dictionary containing lookup results and session_id
         '''
         session_id = input_data.get('session_id', '')
+        result_container = input_data.get('result_container', {})
         
         # Determine which type of result to format based on what's in input_data
         if 'hostname_record' in input_data:
             # Single match found
-            await self._format_single_match(context, input_data, session_id)
+            await self._format_single_match(context, input_data, session_id, result_container)
         elif 'hostname_records' in input_data:
             # Multiple matches found
-            await self._format_multiple_matches(context, input_data, session_id)
+            await self._format_multiple_matches(context, input_data, session_id, result_container)
         else:
             # No match found
-            await self._format_no_match(context, input_data, session_id)
+            await self._format_no_match(context, input_data, session_id, result_container)
     
     async def _format_single_match(
         self,
         context: KernelProcessStepContext,
         input_data: dict,
         session_id: str,
+        result_container: dict,
     ) -> None:
         '''
         Format a single hostname match for display.
@@ -66,25 +76,26 @@ class HostnameFormatStep(KernelProcessStep):
         '''
         hostname_record = input_data.get('hostname_record')
         
-        debug_print(f"DEBUG HostnameFormatStep: Formatting single match for session '{session_id}'")
+        logger.info("Formatting single match", extra={"session_id": session_id, "hostname": hostname_record.hostname})
         
         # Format the response
         response = self._format_hostname_details(hostname_record)
         
-        # Store result
-        store_result(session_id, {
-            'answer': response,
-            'hostname': hostname_record.hostname,
-            'application_name': hostname_record.application_name,
-        })
+        # Store result in container for entry point to retrieve
+        result_container['answer'] = response
+        result_container['hostname'] = hostname_record.hostname
+        result_container['application_name'] = hostname_record.application_name
         
-        # Emit completion event
+        # Emit completion event with answer data
         await context.emit_event(
             process_event=self.OutputEvents.ResultFormatted.value,
             data={
-                "response": response,
+                "answer": response,
+                "hostname": hostname_record.hostname,
+                "application_name": hostname_record.application_name,
                 "session_id": session_id,
-            }
+            },
+            visibility=KernelProcessEventVisibility.Public
         )
     
     async def _format_multiple_matches(
@@ -92,6 +103,7 @@ class HostnameFormatStep(KernelProcessStep):
         context: KernelProcessStepContext,
         input_data: dict,
         session_id: str,
+        result_container: dict,
     ) -> None:
         '''
         Format multiple hostname matches for display.
@@ -105,7 +117,7 @@ class HostnameFormatStep(KernelProcessStep):
         user_query = input_data.get('user_query', '')
         is_partial = input_data.get('is_partial', False)
         
-        debug_print(f"DEBUG HostnameFormatStep: Formatting {len(hostname_records)} matches for session '{session_id}'")
+        logger.info("Formatting multiple matches", extra={"session_id": session_id, "match_count": len(hostname_records), "is_partial": is_partial})
         
         # Format the response based on whether matches are partial or exact
         if is_partial:
@@ -123,19 +135,19 @@ class HostnameFormatStep(KernelProcessStep):
         else:
             response += "\n*Tip: Use the exact hostname for detailed information.*"
         
-        # Store result
-        store_result(session_id, {
-            'answer': response,
-            'match_count': len(hostname_records),
-        })
+        # Store result in container for entry point to retrieve
+        result_container['answer'] = response
+        result_container['match_count'] = len(hostname_records)
         
-        # Emit completion event
+        # Emit completion event with answer data
         await context.emit_event(
             process_event=self.OutputEvents.ResultFormatted.value,
             data={
-                "response": response,
+                "answer": response,
+                "match_count": len(hostname_records),
                 "session_id": session_id,
-            }
+            },
+            visibility=KernelProcessEventVisibility.Public
         )
     
     async def _format_no_match(
@@ -143,6 +155,7 @@ class HostnameFormatStep(KernelProcessStep):
         context: KernelProcessStepContext,
         input_data: dict,
         session_id: str,
+        result_container: dict,
     ) -> None:
         '''
         Format a no match response.
@@ -154,7 +167,7 @@ class HostnameFormatStep(KernelProcessStep):
         '''
         user_query = input_data.get('user_query', '')
         
-        debug_print(f"DEBUG HostnameFormatStep: Formatting no match for session '{session_id}'")
+        logger.info("Formatting no match response", extra={"session_id": session_id, "query": user_query})
         
         # Format the response
         response = f"**No hostname found matching '{user_query}'**\n\n"
@@ -164,19 +177,19 @@ class HostnameFormatStep(KernelProcessStep):
         response += "- The application has team information configured\n\n"
         response += "*Note: The lookup command requires exact hostname matches.*"
         
-        # Store result
-        store_result(session_id, {
-            'answer': response,
-            'match_count': 0,
-        })
+        # Store result in container for entry point to retrieve
+        result_container['answer'] = response
+        result_container['match_count'] = 0
         
-        # Emit completion event
+        # Emit completion event with answer data
         await context.emit_event(
             process_event=self.OutputEvents.ResultFormatted.value,
             data={
-                "response": response,
+                "answer": response,
+                "match_count": 0,
                 "session_id": session_id,
-            }
+            },
+            visibility=KernelProcessEventVisibility.Public
         )
     
     def _format_hostname_details(self, record) -> str:

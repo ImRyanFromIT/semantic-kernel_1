@@ -2,6 +2,7 @@
 Hostname lookup step - Search for hostname in Azure AI Search indexes.
 '''
 
+import logging
 import os
 from enum import Enum
 
@@ -10,11 +11,16 @@ from azure.search.documents import SearchClient
 
 from semantic_kernel.functions import kernel_function
 from semantic_kernel.processes.kernel_process import KernelProcessStep, KernelProcessStepContext
+from semantic_kernel.processes.kernel_process.kernel_process_step_metadata import kernel_process_step_metadata
 
 from src.models.hostname_record import HostnameRecord
-from src.utils.debug_config import debug_print
 
 
+# Configure logger
+logger = logging.getLogger(__name__)
+
+
+@kernel_process_step_metadata("HostnameLookupStep.V1")
 class HostnameLookupStep(KernelProcessStep):
     '''
     Process step to lookup hostname information from Azure AI Search.
@@ -81,20 +87,22 @@ class HostnameLookupStep(KernelProcessStep):
         '''
         user_query = input_data.get('user_query', '').strip()
         session_id = input_data.get('session_id', '')
+        result_container = input_data.get('result_container', {})
         
-        debug_print(f"DEBUG HostnameLookupStep: Looking up hostname '{user_query}', session_id='{session_id}'")
+        logger.info("Looking up hostname", extra={"session_id": session_id, "hostname": user_query})
         
         # Get search clients
         try:
             machines_client, team_client = self._get_search_clients()
         except Exception as e:
-            debug_print(f"DEBUG HostnameLookupStep: Failed to initialize search clients: {e}")
+            logger.error("Failed to initialize search clients", extra={"session_id": session_id, "error": str(e)})
             await context.emit_event(
                 process_event=self.OutputEvents.NoMatchFound.value,
                 data={
                     "user_query": user_query,
                     "session_id": session_id,
                     "error": str(e),
+                    "result_container": result_container,
                 }
             )
             return
@@ -103,30 +111,32 @@ class HostnameLookupStep(KernelProcessStep):
             # Step 1: Try exact match only (lookup command should only return exact matches)
             exact_matches = await self._search_machines(machines_client, user_query, exact=True)
             
-            debug_print(f"DEBUG HostnameLookupStep: Found {len(exact_matches)} exact matches for '{user_query}'")
+            logger.debug("Exact match search completed", extra={"session_id": session_id, "match_count": len(exact_matches)})
             
             if len(exact_matches) == 1:
                 # Single exact match - get team info and return
                 hostname_record = await self._enrich_with_team_info(team_client, exact_matches[0])
                 
                 if hostname_record:
-                    debug_print(f"DEBUG HostnameLookupStep: Found exact match for '{user_query}'")
+                    logger.info("Exact match found", extra={"session_id": session_id, "hostname": user_query})
                     await context.emit_event(
                         process_event=self.OutputEvents.ExactMatchFound.value,
                         data={
                             "hostname_record": hostname_record,
                             "session_id": session_id,
+                            "result_container": result_container,
                         }
                     )
                     return
                 else:
                     # Machine found but no team info - treat as not found
-                    debug_print(f"DEBUG HostnameLookupStep: Found machine but no team info for '{user_query}'")
+                    logger.warning("Machine found but no team info", extra={"session_id": session_id, "hostname": user_query})
                     await context.emit_event(
                         process_event=self.OutputEvents.NoMatchFound.value,
                         data={
                             "user_query": user_query,
                             "session_id": session_id,
+                            "result_container": result_container,
                         }
                     )
                     return
@@ -139,25 +149,26 @@ class HostnameLookupStep(KernelProcessStep):
                         enriched_matches.append(hostname_record)
                 
                 if len(enriched_matches) > 0:
-                    debug_print(f"DEBUG HostnameLookupStep: Found {len(enriched_matches)} exact matches with team info")
+                    logger.info("Multiple exact matches found", extra={"session_id": session_id, "match_count": len(enriched_matches)})
                     await context.emit_event(
                         process_event=self.OutputEvents.MultipleMatchesFound.value,
                         data={
                             "hostname_records": enriched_matches,
                             "user_query": user_query,
                             "session_id": session_id,
+                            "result_container": result_container,
                         }
                     )
                     return
             
             # No exact matches found - try partial matching as fallback
-            debug_print(f"DEBUG HostnameLookupStep: No exact match found for '{user_query}', trying partial match")
+            logger.debug("No exact match found, trying partial match", extra={"session_id": session_id, "hostname": user_query})
             partial_matches = await self._search_machines(machines_client, user_query, exact=False)
             
             # Limit to top 5 results
             partial_matches = partial_matches[:5]
             
-            debug_print(f"DEBUG HostnameLookupStep: Found {len(partial_matches)} partial matches for '{user_query}'")
+            logger.debug("Partial match search completed", extra={"session_id": session_id, "match_count": len(partial_matches)})
             
             if len(partial_matches) > 0:
                 # Enrich partial matches with team info
@@ -168,7 +179,7 @@ class HostnameLookupStep(KernelProcessStep):
                         enriched_partial_matches.append(hostname_record)
                 
                 if len(enriched_partial_matches) > 0:
-                    debug_print(f"DEBUG HostnameLookupStep: Found {len(enriched_partial_matches)} partial matches with team info")
+                    logger.info("Partial matches found", extra={"session_id": session_id, "match_count": len(enriched_partial_matches)})
                     await context.emit_event(
                         process_event=self.OutputEvents.PartialMatchesFound.value,
                         data={
@@ -176,28 +187,31 @@ class HostnameLookupStep(KernelProcessStep):
                             "user_query": user_query,
                             "session_id": session_id,
                             "is_partial": True,
+                            "result_container": result_container,
                         }
                     )
                     return
             
             # No matches found at all (exact or partial)
-            debug_print(f"DEBUG HostnameLookupStep: No matches found for '{user_query}'")
+            logger.info("No matches found", extra={"session_id": session_id, "hostname": user_query})
             await context.emit_event(
                 process_event=self.OutputEvents.NoMatchFound.value,
                 data={
                     "user_query": user_query,
                     "session_id": session_id,
+                    "result_container": result_container,
                 }
             )
         
         except Exception as e:
-            debug_print(f"DEBUG HostnameLookupStep: Error during lookup: {e}")
+            logger.error("Error during lookup", extra={"session_id": session_id, "error": str(e)})
             await context.emit_event(
                 process_event=self.OutputEvents.NoMatchFound.value,
                 data={
                     "user_query": user_query,
                     "session_id": session_id,
                     "error": str(e),
+                    "result_container": result_container,
                 }
             )
     
@@ -238,7 +252,7 @@ class HostnameLookupStep(KernelProcessStep):
             return machines
         
         except Exception as e:
-            debug_print(f"DEBUG HostnameLookupStep: Error searching machines: {e}")
+            logger.error("Error searching machines", extra={"error": str(e)})
             return []
     
     async def _get_team_info(self, team_client: SearchClient, application_name: str) -> dict | None:
@@ -272,7 +286,7 @@ class HostnameLookupStep(KernelProcessStep):
             return None
         
         except Exception as e:
-            debug_print(f"DEBUG HostnameLookupStep: Error getting team info: {e}")
+            logger.error("Error getting team info", extra={"error": str(e)})
             return None
     
     async def _enrich_with_team_info(self, team_client: SearchClient, machine: dict) -> HostnameRecord | None:

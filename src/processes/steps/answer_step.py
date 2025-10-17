@@ -2,19 +2,23 @@
 Answer step - Format the final response for the user using LLM plugins.
 '''
 
+import logging
 from enum import Enum
 
-from semantic_kernel import Kernel
 from semantic_kernel.functions import kernel_function
 from semantic_kernel.processes.kernel_process import (
     KernelProcessStep,
     KernelProcessStepContext,
     KernelProcessEventVisibility,
 )
+from semantic_kernel.processes.kernel_process.kernel_process_step_metadata import kernel_process_step_metadata
 
-from src.utils.debug_config import debug_print
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
+@kernel_process_step_metadata("AnswerStep.V1")
 class AnswerStep(KernelProcessStep):
     '''
     Process step to format the final answer for the user.
@@ -46,30 +50,30 @@ class AnswerStep(KernelProcessStep):
         alternatives = input_data.get('alternatives', [])
         session_id = input_data.get('session_id', '')
         user_query = input_data.get('user_query', '')
+        result_container = input_data.get('result_container', {})
         
-        debug_print(f"DEBUG AnswerStep: Called with session_id='{session_id}', selected_srm={selected_srm is not None}")
+        logger.info("Formatting answer", extra={"session_id": session_id, "has_recommendation": selected_srm is not None})
         
         if alternatives is None:
             alternatives = []
         
         if not selected_srm:
             answer = self._format_fallback()
+            logger.info("No recommendation found, using fallback", extra={"session_id": session_id})
             
-            # Store result in global store
-            from src.utils.result_store import store_result
-            store_result(session_id, {
-                'answer': answer,
-                'selected_id': None,
-                'confidence': confidence,
-            })
+            # Store result in container for entry point to retrieve
+            result_container['final_answer'] = answer
+            result_container['selected_id'] = None
+            result_container['confidence'] = confidence
             
-            # Emit public event so it can be captured at process level
+            # Emit public event with answer data
             await context.emit_event(
                 process_event=self.OutputEvents.FallbackAnswer.value,
                 data={
                     "final_answer": answer,
                     "selected_id": None,
                     "confidence": confidence,
+                    "session_id": session_id,
                 },
                 visibility=KernelProcessEventVisibility.Public
             )
@@ -80,21 +84,21 @@ class AnswerStep(KernelProcessStep):
             selected_srm, confidence, alternatives, user_query
         )
         
-        # Store result in global store
-        from src.utils.result_store import store_result
-        store_result(session_id, {
-            'answer': answer,
-            'selected_id': selected_srm.get('srm_id'),
-            'confidence': confidence,
-        })
+        logger.info("Answer formatted successfully", extra={"session_id": session_id, "srm_id": selected_srm.get('srm_id')})
         
-        # Emit public event so it can be captured at process level
+        # Store result in container for entry point to retrieve
+        result_container['final_answer'] = answer
+        result_container['selected_id'] = selected_srm.get('srm_id')
+        result_container['confidence'] = confidence
+        
+        # Emit public event with answer data
         await context.emit_event(
             process_event=self.OutputEvents.AnswerPublished.value,
             data={
                 "final_answer": answer,
                 "selected_id": selected_srm.get('srm_id'),
                 "confidence": confidence,
+                "session_id": session_id,
             },
             visibility=KernelProcessEventVisibility.Public
         )

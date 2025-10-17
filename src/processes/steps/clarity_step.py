@@ -2,6 +2,7 @@
 Clarity step - Extract intent and decide if clarification is needed using LLM plugins.
 '''
 
+import logging
 from enum import Enum
 
 from semantic_kernel import Kernel
@@ -11,10 +12,14 @@ from semantic_kernel.processes.kernel_process import (
     KernelProcessStepContext,
     KernelProcessEventVisibility,
 )
+from semantic_kernel.processes.kernel_process.kernel_process_step_metadata import kernel_process_step_metadata
 
-from src.utils.debug_config import debug_print
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
+@kernel_process_step_metadata("ClarityStep.V1")
 class ClarityStep(KernelProcessStep):
     '''
     Process step to extract key terms and determine if clarification is needed.
@@ -24,6 +29,8 @@ class ClarityStep(KernelProcessStep):
     - Extract relevant entities
     - Assess query clarity
     - Generate contextual clarifying questions
+    
+    Note: Kernel is passed through event data due to SK ProcessBuilder constraints.
     '''
     
     class OutputEvents(Enum):
@@ -48,36 +55,38 @@ class ClarityStep(KernelProcessStep):
         user_query = input_data.get('user_query', '')
         vector_store = input_data.get('vector_store')
         session_id = input_data.get('session_id', '')
-        
-        debug_print(f"DEBUG ClarityStep: Called with user_query='{user_query}', session_id='{session_id}'")
-        
-        # Use LLM plugins to analyze the query - get kernel from input_data
         kernel = input_data.get('kernel')
+        result_container = input_data.get('result_container', {})
+        
+        logger.info("Analyzing query clarity", extra={"session_id": session_id, "query": user_query})
+        
+        # Use LLM plugins to analyze the query - kernel from input_data
         try:
             # Step 1: Detect intent
             detected_intent = await self._detect_intent(user_query, kernel)
-            debug_print(f"DEBUG ClarityStep: Detected intent: {detected_intent}")
+            logger.debug("Intent detected", extra={"session_id": session_id, "intent": detected_intent})
             
             # Step 2: Extract entities
             extracted_entities = await self._extract_entities(user_query, kernel)
-            debug_print(f"DEBUG ClarityStep: Extracted entities: {extracted_entities}")
+            logger.debug("Entities extracted", extra={"session_id": session_id, "entities": extracted_entities})
             
             # Step 3: Assess clarity
             needs_clarification = await self._assess_clarity(user_query, extracted_entities, kernel)
-            debug_print(f"DEBUG ClarityStep: Needs clarification: {needs_clarification}")
+            logger.debug("Clarity assessed", extra={"session_id": session_id, "needs_clarification": needs_clarification})
             
             if needs_clarification:
                 # Generate a contextual clarifying question using LLM
                 clarification = await self._generate_clarification_question(
                     user_query, detected_intent, extracted_entities, kernel
                 )
-                debug_print(f"DEBUG ClarityStep: Generated clarification: {clarification}")
+                logger.info("Clarification needed", extra={"session_id": session_id, "clarification": clarification})
                 
-                # Store result in global store
-                from src.utils.result_store import store_result
-                store_result(session_id, {'clarification': clarification})
+                # Store result in container for entry point to retrieve
+                result_container['clarification'] = clarification
+                result_container['intent'] = detected_intent
+                result_container['key_terms'] = extracted_entities.split(', ')
                 
-                # Emit public event for clarification
+                # Emit public event for clarification with dependencies
                 await context.emit_event(
                     process_event=self.OutputEvents.NeedsClarification.value,
                     data={
@@ -93,6 +102,7 @@ class ClarityStep(KernelProcessStep):
                 )
             else:
                 # We have enough clarity to proceed
+                logger.info("Clarity obtained, proceeding", extra={"session_id": session_id})
                 await context.emit_event(
                     process_event=self.OutputEvents.ClarityObtained.value,
                     data={
@@ -102,13 +112,13 @@ class ClarityStep(KernelProcessStep):
                         "vector_store": vector_store,
                         "session_id": session_id,
                         "kernel": kernel,
+                        "result_container": result_container,
                     },
                 )
         except Exception as e:
-            print(f"[!] Plugin error in ClarityStep: {e}")
-            print("[*] Falling back to default behavior")
+            logger.error("Plugin error in ClarityStep, falling back to default", extra={"session_id": session_id, "error": str(e)})
             
-            # Proceed with query as-is
+            # Proceed with query as-is with dependencies
             await context.emit_event(
                 process_event=self.OutputEvents.ClarityObtained.value,
                 data={
@@ -118,6 +128,7 @@ class ClarityStep(KernelProcessStep):
                     "vector_store": vector_store,
                     "session_id": session_id,
                     "kernel": kernel,
+                    "result_container": result_container,
                 },
             )
     
@@ -143,7 +154,7 @@ class ClarityStep(KernelProcessStep):
             )
             return result
         except Exception as e:
-            print(f"[!] Intent detection failed: {e}")
+            logger.warning("Intent detection failed, using default", extra={"error": str(e)})
             return "GeneralInquiry"
     
     async def _extract_entities(self, user_query: str, kernel: Kernel) -> str:
@@ -169,7 +180,7 @@ class ClarityStep(KernelProcessStep):
             )
             return result
         except Exception as e:
-            print(f"[!] Entity extraction failed: {e}")
+            logger.warning("Entity extraction failed, using default", extra={"error": str(e)})
             return "none"
     
     async def _assess_clarity(self, user_query: str, extracted_entities: str, kernel: Kernel) -> bool:
@@ -196,7 +207,7 @@ class ClarityStep(KernelProcessStep):
             )
             return result.lower() == 'unclear'
         except Exception as e:
-            print(f"[!] Clarity assessment failed: {e}")
+            logger.warning("Clarity assessment failed, defaulting to clear", extra={"error": str(e)})
             # Default to not needing clarification on error
             return False
     
@@ -232,6 +243,6 @@ class ClarityStep(KernelProcessStep):
             )
             return result
         except Exception as e:
-            print(f"[!] Clarification generation failed: {e}")
+            logger.warning("Clarification generation failed, using default", extra={"error": str(e)})
             return "Could you provide more details about your request?"
 

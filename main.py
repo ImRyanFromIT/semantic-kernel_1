@@ -12,7 +12,6 @@ from semantic_kernel.processes.local_runtime.local_kernel_process import start
 
 from src.utils.kernel_builder import create_kernel
 from src.utils.telemetry import TelemetryLogger
-from src.utils.result_store import store_result, get_result, clear_result
 from src.utils.store_factory import create_vector_store
 from src.utils.debug_config import debug_print
 from src.data.data_loader import SRMDataLoader
@@ -94,11 +93,15 @@ async def run_query(
         The final answer or clarification question
     '''
     # Create initial event data with user_query, vector_store, session_id, and kernel
+    # Note: SK ProcessBuilder requires passing dependencies through events, not constructors
+    # result_container will be populated by steps with the final output
+    result_container = {}
     initial_data = {
         "user_query": user_query,
         "vector_store": vector_store,
         "session_id": session_id,
         "kernel": kernel,
+        "result_container": result_container,
     }
     
     # Start process
@@ -110,24 +113,6 @@ async def run_query(
     )
     
     try:
-        # Use a result container to capture public events
-        result_data = {}
-        
-        def handle_public_event(event):
-            '''Capture public events from the process'''
-            if event.id == "AnswerPublished":
-                result_data['answer'] = event.data.get('final_answer', '')
-                result_data['selected_id'] = event.data.get('selected_id')
-                result_data['confidence'] = event.data.get('confidence', 0.0)
-            elif event.id == "FallbackAnswer":
-                result_data['answer'] = event.data.get('final_answer', '')
-                result_data['selected_id'] = None
-                result_data['confidence'] = 0.0
-            elif event.id == "NeedsClarification":
-                result_data['clarification'] = event.data.get('clarification', '')
-            elif event.id == "InputRejected":
-                result_data['rejection'] = event.data.get('rejection_message', 'Invalid input')
-        
         async with await start(
             process=kernel_process,
             kernel=kernel,
@@ -145,25 +130,23 @@ async def run_query(
             if hasattr(final_state, 'name'):
                 debug_print(f"DEBUG: Process name: {final_state.name}")
             
-            # Retrieve result from global store (still used by steps - will be refactored)
-            result = get_result(session_id)
-            clear_result(session_id)
+            # Result was populated by steps via result_container
+            result_data = result_container
+            debug_print(f"DEBUG: Retrieved result for session {session_id}: {result_data}")
             
-            debug_print(f"DEBUG: Retrieved result for session {session_id}: {result}")
-            
-            if result:
-                if 'rejection' in result:
-                    return f"[!] {result['rejection']}"
-                elif 'clarification' in result:
-                    return f"[?] {result['clarification']}"
-                elif 'answer' in result:
+            if result_data:
+                if 'rejection_message' in result_data:
+                    return f"[!] {result_data['rejection_message']}"
+                elif 'clarification' in result_data:
+                    return f"[?] {result_data['clarification']}"
+                elif 'final_answer' in result_data:
                     # Log telemetry
                     telemetry.log_answer_published(
                         session_id=session_id,
-                        selected_id=result.get('selected_id'),
-                        confidence=result.get('confidence', 0.0)
+                        selected_id=result_data.get('selected_id'),
+                        confidence=result_data.get('confidence', 0.0)
                     )
-                    return result['answer']
+                    return result_data['final_answer']
             
             return "Process completed but no result was generated."
     
@@ -197,10 +180,14 @@ async def run_hostname_query(
         The formatted hostname information
     '''
     # Create initial event data with user_query, session_id, and kernel
+    # Note: SK ProcessBuilder requires passing dependencies through events, not constructors
+    # result_container will be populated by steps with the final output
+    result_container = {}
     initial_data = {
         "user_query": user_query,
         "session_id": session_id,
         "kernel": kernel,
+        "result_container": result_container,
     }
     
     # Start process
@@ -229,16 +216,14 @@ async def run_hostname_query(
             if hasattr(final_state, 'name'):
                 debug_print(f"DEBUG: Process name: {final_state.name}")
             
-            # Retrieve result from global store (still used by steps - will be refactored)
-            result = get_result(session_id)
-            clear_result(session_id)
+            # Result was populated by steps via result_container
+            result_data = result_container
+            debug_print(f"DEBUG: Retrieved result for session {session_id}: {result_data}")
             
-            debug_print(f"DEBUG: Retrieved result for session {session_id}: {result}")
-            
-            if result:
-                if 'rejection' in result:
-                    return f"[!] {result['rejection']}"
-                elif 'answer' in result:
+            if result_data:
+                if 'rejection_message' in result_data:
+                    return f"[!] {result_data['rejection_message']}"
+                elif 'answer' in result_data:
                     # Log telemetry
                     telemetry.log_process_state_change(
                         session_id=session_id,
@@ -246,7 +231,7 @@ async def run_hostname_query(
                         from_state="running",
                         to_state="completed"
                     )
-                    return result['answer']
+                    return result_data['answer']
             
             return "Process completed but no result was generated."
     
