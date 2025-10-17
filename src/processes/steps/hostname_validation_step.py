@@ -24,22 +24,10 @@ class HostnameValidationStep(KernelProcessStep):
     to intelligently validate hostname queries.
     '''
     
-    _kernel: Kernel = None
-    
     class OutputEvents(Enum):
         '''Output events from the validation step.'''
         InputValid = "InputValid"
         InputRejected = "InputRejected"
-    
-    @classmethod
-    def set_kernel(cls, kernel: Kernel):
-        '''Set the kernel for all instances of this step.'''
-        cls._kernel = kernel
-    
-    @property
-    def kernel(self) -> Kernel:
-        '''Get the kernel instance.'''
-        return self.__class__._kernel
     
     @kernel_function(name="validate_hostname_query")
     async def validate_hostname_query(
@@ -56,12 +44,13 @@ class HostnameValidationStep(KernelProcessStep):
         '''
         user_query = input_data.get('user_query', '').strip()
         session_id = input_data.get('session_id', '')
+        kernel = input_data.get('kernel')
         
         debug_print(f"DEBUG HostnameValidationStep: Validating hostname query for session {session_id}")
         debug_print(f"DEBUG HostnameValidationStep: Query: '{user_query}'")
         
-        # Use LLM to validate the hostname query
-        is_valid, rejection_reason = await self._validate_with_llm(user_query)
+        # Use LLM to validate the hostname query - get kernel from input_data
+        is_valid, rejection_reason = await self._validate_with_llm(user_query, kernel)
         
         if not is_valid:
             debug_print(f"DEBUG HostnameValidationStep: Input rejected - {rejection_reason}")
@@ -89,23 +78,24 @@ class HostnameValidationStep(KernelProcessStep):
         else:
             debug_print(f"DEBUG HostnameValidationStep: Input is valid")
             
-            # Pass through to next step
+            # Pass through to next step (include kernel for subsequent steps)
             await context.emit_event(
                 process_event=self.OutputEvents.InputValid.value,
-                data=input_data,
+                data=input_data,  # kernel is already in input_data
             )
     
-    async def _validate_with_llm(self, hostname_query: str) -> tuple[bool, str]:
+    async def _validate_with_llm(self, hostname_query: str, kernel: Kernel) -> tuple[bool, str]:
         '''
         Use LLM to validate the hostname query.
         
         Args:
             hostname_query: The hostname query to validate
+            kernel: Semantic Kernel instance
             
         Returns:
             Tuple of (is_valid, rejection_reason)
         '''
-        if not self.kernel:
+        if not kernel:
             debug_print("DEBUG HostnameValidationStep: No kernel available for LLM validation")
             return True, ''  # Fail open if no kernel
         
@@ -114,7 +104,7 @@ class HostnameValidationStep(KernelProcessStep):
             from src.utils.plugin_loader import invoke_plugin
             
             validation_result = await invoke_plugin(
-                kernel=self.kernel,
+                kernel=kernel,
                 plugin_name="hostname_validation",
                 function_name="hostname_validation",
                 hostname_query=hostname_query

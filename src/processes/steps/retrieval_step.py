@@ -40,6 +40,7 @@ class RetrievalStep(KernelProcessStep):
         user_query = input_data.get('user_query', '')
         vector_store = input_data.get('vector_store')
         session_id = input_data.get('session_id', '')
+        kernel = input_data.get('kernel')
         
         debug_print(f"DEBUG RetrievalStep: Called with user_query='{user_query}', key_terms={key_terms}, session_id='{session_id}'")
         
@@ -57,7 +58,7 @@ class RetrievalStep(KernelProcessStep):
             debug_print(f"DEBUG RetrievalStep: Search failed with error: {e}")
             await context.emit_event(
                 process_event=self.OutputEvents.NoCandidates.value,
-                data={"error": str(e), "user_query": user_query, "vector_store": vector_store, "session_id": session_id}
+                data={"error": str(e), "user_query": user_query, "vector_store": vector_store, "session_id": session_id, "kernel": kernel}
             )
             return
         
@@ -108,6 +109,7 @@ class RetrievalStep(KernelProcessStep):
                     "search_query": search_query,
                     "vector_store": vector_store,
                     "session_id": session_id,
+                    "kernel": kernel,
                 }
             )
         else:
@@ -121,6 +123,7 @@ class RetrievalStep(KernelProcessStep):
                     "user_query": user_query,
                     "vector_store": vector_store,
                     "session_id": session_id,
+                    "kernel": kernel,
                 }
             )
     

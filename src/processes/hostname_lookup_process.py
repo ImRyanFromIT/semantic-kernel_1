@@ -31,26 +31,25 @@ class HostnameLookupProcess:
     
     @staticmethod
     def create_process(
-        kernel: Kernel,
         process_name: str = "HostnameLookupProcess"
     ) -> ProcessBuilder:
         '''
         Create the Hostname Lookup process.
         
         Args:
-            kernel: The Semantic Kernel instance
             process_name: Name for the process
             
         Returns:
             ProcessBuilder configured with all steps and transitions
+            
+        Note:
+            Kernel is passed via initial_event data,
+            not during process construction.
         '''
         # Create process builder
         process_builder = ProcessBuilder(name=process_name)
         
-        # Set kernel for steps (available for future agent-based enhancements)
-        HostnameValidationStep.set_kernel(kernel)
-        
-        # Add steps
+        # Add steps (kernel will be available through process context)
         validation_step = process_builder.add_step(HostnameValidationStep)
         lookup_step = process_builder.add_step(HostnameLookupStep)
         format_step = process_builder.add_step(HostnameFormatStep)

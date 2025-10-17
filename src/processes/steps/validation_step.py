@@ -36,22 +36,10 @@ class ValidationStep(KernelProcessStep):
     3. LLM-based content filtering (gibberish, spam detection)
     '''
     
-    _kernel: Kernel = None
-    
     class OutputEvents(Enum):
         '''Output events from the validation step.'''
         InputValid = "InputValid"
         InputRejected = "InputRejected"
-    
-    @classmethod
-    def set_kernel(cls, kernel: Kernel):
-        '''Set the kernel for all instances of this step.'''
-        cls._kernel = kernel
-    
-    @property
-    def kernel(self) -> Kernel:
-        '''Get the kernel instance.'''
-        return self.__class__._kernel
     
     @kernel_function(name="validate_input")
     async def validate_input(
@@ -64,17 +52,18 @@ class ValidationStep(KernelProcessStep):
         
         Args:
             context: Process step context
-            input_data: Dictionary containing user_query, vector_store, session_id
+            input_data: Dictionary containing user_query, vector_store, session_id, kernel
         '''
         user_query = input_data.get('user_query', '')
         vector_store = input_data.get('vector_store')
         session_id = input_data.get('session_id', '')
+        kernel = input_data.get('kernel')
         
         debug_print(f"DEBUG ValidationStep: Validating input for session {session_id}")
         debug_print(f"DEBUG ValidationStep: Query length: {len(user_query)}")
         
-        # Run validation checks
-        is_valid, rejection_reason = await self._run_validation_checks(user_query)
+        # Run validation checks - get kernel from input_data
+        is_valid, rejection_reason = await self._run_validation_checks(user_query, kernel)
         
         if not is_valid:
             debug_print(f"DEBUG ValidationStep: Input rejected - {rejection_reason}")
@@ -113,18 +102,19 @@ class ValidationStep(KernelProcessStep):
         else:
             debug_print(f"DEBUG ValidationStep: Input validated successfully")
             
-            # Pass through to next step
+            # Pass through to next step (include kernel for subsequent steps)
             await context.emit_event(
                 process_event=self.OutputEvents.InputValid.value,
-                data=input_data,
+                data=input_data,  # kernel is already in input_data
             )
     
-    async def _run_validation_checks(self, user_query: str) -> tuple[bool, str]:
+    async def _run_validation_checks(self, user_query: str, kernel: Kernel) -> tuple[bool, str]:
         '''
         Run all validation checks on the user input.
         
         Args:
             user_query: The user's input to validate
+            kernel: Semantic Kernel instance for LLM validation
             
         Returns:
             Tuple of (is_valid, rejection_reason)
@@ -143,7 +133,7 @@ class ValidationStep(KernelProcessStep):
         
         # Check 3: LLM-based content validation
         try:
-            content_valid, content_reason = await self._check_content_with_llm(user_query)
+            content_valid, content_reason = await self._check_content_with_llm(user_query, kernel)
             if not content_valid:
                 return False, content_reason
         except Exception as e:
@@ -203,17 +193,18 @@ class ValidationStep(KernelProcessStep):
         
         return False
     
-    async def _check_content_with_llm(self, user_query: str) -> tuple[bool, str]:
+    async def _check_content_with_llm(self, user_query: str, kernel: Kernel) -> tuple[bool, str]:
         '''
         Use LLM to check if content is genuine or junk.
         
         Args:
             user_query: The user's input
+            kernel: Semantic Kernel instance
             
         Returns:
             Tuple of (is_valid, rejection_reason)
         '''
-        if not self.kernel:
+        if not kernel:
             debug_print("DEBUG ValidationStep: No kernel available for LLM validation")
             return True, ''  # Fail open if no kernel
         
@@ -222,7 +213,7 @@ class ValidationStep(KernelProcessStep):
             from src.utils.plugin_loader import invoke_plugin
             
             validation_result = await invoke_plugin(
-                kernel=self.kernel,
+                kernel=kernel,
                 plugin_name="content_validation",
                 function_name="content_validation",
                 user_input=user_query

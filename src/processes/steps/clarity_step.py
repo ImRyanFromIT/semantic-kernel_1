@@ -26,22 +26,10 @@ class ClarityStep(KernelProcessStep):
     - Generate contextual clarifying questions
     '''
     
-    _kernel: Kernel = None
-    
     class OutputEvents(Enum):
         '''Output events from the clarity step.'''
         ClarityObtained = "ClarityObtained"
         NeedsClarification = "NeedsClarification"
-    
-    @classmethod
-    def set_kernel(cls, kernel: Kernel):
-        '''Set the kernel for all instances of this step.'''
-        cls._kernel = kernel
-    
-    @property
-    def kernel(self) -> Kernel:
-        '''Get the kernel instance.'''
-        return self.__class__._kernel
     
     @kernel_function(name="analyze_query")
     async def analyze_query(
@@ -63,24 +51,25 @@ class ClarityStep(KernelProcessStep):
         
         debug_print(f"DEBUG ClarityStep: Called with user_query='{user_query}', session_id='{session_id}'")
         
-        # Use LLM plugins to analyze the query
+        # Use LLM plugins to analyze the query - get kernel from input_data
+        kernel = input_data.get('kernel')
         try:
             # Step 1: Detect intent
-            detected_intent = await self._detect_intent(user_query)
+            detected_intent = await self._detect_intent(user_query, kernel)
             debug_print(f"DEBUG ClarityStep: Detected intent: {detected_intent}")
             
             # Step 2: Extract entities
-            extracted_entities = await self._extract_entities(user_query)
+            extracted_entities = await self._extract_entities(user_query, kernel)
             debug_print(f"DEBUG ClarityStep: Extracted entities: {extracted_entities}")
             
             # Step 3: Assess clarity
-            needs_clarification = await self._assess_clarity(user_query, extracted_entities)
+            needs_clarification = await self._assess_clarity(user_query, extracted_entities, kernel)
             debug_print(f"DEBUG ClarityStep: Needs clarification: {needs_clarification}")
             
             if needs_clarification:
                 # Generate a contextual clarifying question using LLM
                 clarification = await self._generate_clarification_question(
-                    user_query, detected_intent, extracted_entities
+                    user_query, detected_intent, extracted_entities, kernel
                 )
                 debug_print(f"DEBUG ClarityStep: Generated clarification: {clarification}")
                 
@@ -98,6 +87,7 @@ class ClarityStep(KernelProcessStep):
                         "user_query": user_query,
                         "vector_store": vector_store,
                         "session_id": session_id,
+                        "kernel": kernel,
                     },
                     visibility=KernelProcessEventVisibility.Public
                 )
@@ -111,6 +101,7 @@ class ClarityStep(KernelProcessStep):
                         "user_query": user_query,
                         "vector_store": vector_store,
                         "session_id": session_id,
+                        "kernel": kernel,
                     },
                 )
         except Exception as e:
@@ -126,15 +117,17 @@ class ClarityStep(KernelProcessStep):
                     "user_query": user_query,
                     "vector_store": vector_store,
                     "session_id": session_id,
+                    "kernel": kernel,
                 },
             )
     
-    async def _detect_intent(self, user_query: str) -> str:
+    async def _detect_intent(self, user_query: str, kernel: Kernel) -> str:
         '''
         Use LLM plugin to detect user intent.
         
         Args:
             user_query: The user's query
+            kernel: Semantic Kernel instance
             
         Returns:
             Detected intent string
@@ -143,7 +136,7 @@ class ClarityStep(KernelProcessStep):
         
         try:
             result = await invoke_plugin(
-                self.kernel,
+                kernel,
                 plugin_name='intent_detection',
                 function_name='detect_intent',
                 user_query=user_query
@@ -153,12 +146,13 @@ class ClarityStep(KernelProcessStep):
             print(f"[!] Intent detection failed: {e}")
             return "GeneralInquiry"
     
-    async def _extract_entities(self, user_query: str) -> str:
+    async def _extract_entities(self, user_query: str, kernel: Kernel) -> str:
         '''
         Use LLM plugin to extract entities from query.
         
         Args:
             user_query: The user's query
+            kernel: Semantic Kernel instance
             
         Returns:
             Comma-separated list of entities
@@ -167,7 +161,7 @@ class ClarityStep(KernelProcessStep):
         
         try:
             result = await invoke_plugin(
-                self.kernel,
+                kernel,
                 plugin_name='entity_extraction',
                 function_name='extract_entities',
                 user_query=user_query,
@@ -178,13 +172,14 @@ class ClarityStep(KernelProcessStep):
             print(f"[!] Entity extraction failed: {e}")
             return "none"
     
-    async def _assess_clarity(self, user_query: str, extracted_entities: str) -> bool:
+    async def _assess_clarity(self, user_query: str, extracted_entities: str, kernel: Kernel) -> bool:
         '''
         Use LLM plugin to assess if query needs clarification.
         
         Args:
             user_query: The user's query
             extracted_entities: Entities extracted from query
+            kernel: Semantic Kernel instance
             
         Returns:
             True if clarification is needed
@@ -193,7 +188,7 @@ class ClarityStep(KernelProcessStep):
         
         try:
             result = await invoke_plugin(
-                self.kernel,
+                kernel,
                 plugin_name='clarity_classifier',
                 function_name='assess_clarity',
                 user_query=user_query,
@@ -209,7 +204,8 @@ class ClarityStep(KernelProcessStep):
         self, 
         user_query: str, 
         detected_intent: str, 
-        extracted_entities: str
+        extracted_entities: str,
+        kernel: Kernel
     ) -> str:
         '''
         Use LLM plugin to generate a contextual clarifying question.
@@ -218,6 +214,7 @@ class ClarityStep(KernelProcessStep):
             user_query: The user's query
             detected_intent: The detected intent
             extracted_entities: Extracted entities
+            kernel: Semantic Kernel instance
             
         Returns:
             A clarifying question to ask the user
@@ -226,7 +223,7 @@ class ClarityStep(KernelProcessStep):
         
         try:
             result = await invoke_plugin(
-                self.kernel,
+                kernel,
                 plugin_name='clarification_generator',
                 function_name='generate_clarification',
                 user_query=user_query,

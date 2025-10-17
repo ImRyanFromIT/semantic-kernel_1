@@ -26,11 +26,6 @@ from src.processes.srm_discovery_process import SRMDiscoveryProcess
 from src.processes.hostname_lookup_process import HostnameLookupProcess
 
 
-# Global state - initialized at startup
-kernel = None
-vector_store = None
-telemetry = None
-
 # FastAPI app
 app = FastAPI(title="AI Concierge")
 
@@ -63,23 +58,21 @@ class HostnameResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     '''
-    Initialize the kernel, vector store, and load SRM data on startup.
+    Initialize the kernel, vector store, build processes, and load SRM data on startup.
     '''
-    global kernel, vector_store, telemetry
-    
     import os
     
     print("[*] Initializing AI Concierge...")
     
     # Create kernel with chat and embedding services
-    kernel = create_kernel()
+    app.state.kernel = create_kernel()
     print("[+] Kernel initialized")
     
     # Get embedding service
-    embedding_service = kernel.get_service("embedding")
+    embedding_service = app.state.kernel.get_service("embedding")
     
     # Create vector store using factory
-    vector_store = create_vector_store(embedding_service)
+    app.state.vector_store = create_vector_store(embedding_service)
     print("[+] Vector store created")
     
     # Load data based on store type
@@ -88,40 +81,57 @@ async def startup_event():
     if store_type == 'in_memory':
         # Load SRM catalog from CSV for in-memory store
         print("[*] Loading SRM catalog from CSV...")
-        data_loader = SRMDataLoader(vector_store)
+        data_loader = SRMDataLoader(app.state.vector_store)
         num_records = await data_loader.load_and_index("data/srm_catalog.csv")
         print(f"[+] Loaded and indexed {num_records} SRM records")
     else:
         # Azure AI Search - data already exists in the index
         print("[+] Using existing Azure AI Search index")
-        await vector_store.ensure_collection_exists()
+        await app.state.vector_store.ensure_collection_exists()
+    
+    # Build process definitions once (they will be reused for all requests)
+    print("[*] Building process definitions...")
+    srm_process_builder = SRMDiscoveryProcess.create_process()
+    app.state.srm_process = srm_process_builder.build()
+    
+    hostname_process_builder = HostnameLookupProcess.create_process()
+    app.state.hostname_process = hostname_process_builder.build()
+    print("[+] Process definitions built")
     
     # Initialize telemetry
-    telemetry = TelemetryLogger()
+    app.state.telemetry = TelemetryLogger()
     
     print("[+] AI Concierge ready!")
 
 
-async def run_query(user_query: str, session_id: str) -> str:
+async def run_query(
+    kernel,
+    vector_store,
+    srm_process,
+    telemetry,
+    user_query: str,
+    session_id: str
+) -> str:
     '''
     Run a single query through the discovery process.
     
     Args:
+        kernel: Semantic Kernel instance
+        vector_store: Vector store with SRM data
+        srm_process: Pre-built process definition
+        telemetry: Telemetry logger
         user_query: The user's query
         session_id: Session identifier
         
     Returns:
         The final answer or clarification question
     '''
-    # Create process
-    process_builder = SRMDiscoveryProcess.create_process(kernel, vector_store)
-    kernel_process = process_builder.build()
-    
-    # Create initial event data with user_query, vector_store, and session_id
+    # Create initial event data with user_query, vector_store, session_id, and kernel
     initial_data = {
         "user_query": user_query,
         "vector_store": vector_store,
         "session_id": session_id,
+        "kernel": kernel,
     }
     
     # Start process
@@ -133,13 +143,15 @@ async def run_query(user_query: str, session_id: str) -> str:
     )
     
     try:
+        # Use pre-built process definition (reused for all requests)
         async with await start(
-            process=kernel_process,
+            process=srm_process,
             kernel=kernel,
             initial_event=KernelProcessEvent(
                 id=SRMDiscoveryProcess.ProcessEvents.StartProcess.value,
                 data=initial_data
             ),
+            max_supersteps=50,
         ) as process_context:
             # Get final state
             final_state = await process_context.get_state()
@@ -149,7 +161,7 @@ async def run_query(user_query: str, session_id: str) -> str:
             if hasattr(final_state, 'name'):
                 debug_print(f"DEBUG: Process name: {final_state.name}")
             
-            # Retrieve result from global store
+            # Retrieve result from global store (still used by steps - will be refactored)
             result = get_result(session_id)
             clear_result(session_id)
             
@@ -180,25 +192,31 @@ async def run_query(user_query: str, session_id: str) -> str:
         return f"[!] An error occurred: {str(e)}"
 
 
-async def run_hostname_query(hostname_query: str, session_id: str) -> str:
+async def run_hostname_query(
+    kernel,
+    hostname_process,
+    telemetry,
+    hostname_query: str,
+    session_id: str
+) -> str:
     '''
     Run a hostname lookup query.
     
     Args:
+        kernel: Semantic Kernel instance
+        hostname_process: Pre-built process definition
+        telemetry: Telemetry logger
         hostname_query: The hostname to look up
         session_id: Session identifier
         
     Returns:
         The formatted hostname information
     '''
-    # Create process
-    process_builder = HostnameLookupProcess.create_process(kernel)
-    kernel_process = process_builder.build()
-    
-    # Create initial event data with user_query and session_id
+    # Create initial event data with user_query, session_id, and kernel
     initial_data = {
         "user_query": hostname_query,
         "session_id": session_id,
+        "kernel": kernel,
     }
     
     # Start process
@@ -210,13 +228,15 @@ async def run_hostname_query(hostname_query: str, session_id: str) -> str:
     )
     
     try:
+        # Use pre-built process definition (reused for all requests)
         async with await start(
-            process=kernel_process,
+            process=hostname_process,
             kernel=kernel,
             initial_event=KernelProcessEvent(
                 id=HostnameLookupProcess.ProcessEvents.StartProcess.value,
                 data=initial_data
             ),
+            max_supersteps=50,
         ) as process_context:
             # Get final state
             final_state = await process_context.get_state()
@@ -226,7 +246,7 @@ async def run_hostname_query(hostname_query: str, session_id: str) -> str:
             if hasattr(final_state, 'name'):
                 debug_print(f"DEBUG: Process name: {final_state.name}")
             
-            # Retrieve result from global store
+            # Retrieve result from global store (still used by steps - will be refactored)
             result = get_result(session_id)
             clear_result(session_id)
             
@@ -276,6 +296,10 @@ async def query_endpoint(request: QueryRequest):
     try:
         # Run the query through the process
         response = await run_query(
+            kernel=app.state.kernel,
+            vector_store=app.state.vector_store,
+            srm_process=app.state.srm_process,
+            telemetry=app.state.telemetry,
             user_query=request.query.strip(),
             session_id=session_id
         )
@@ -310,6 +334,9 @@ async def hostname_endpoint(request: HostnameRequest):
     try:
         # Run the hostname lookup
         response = await run_hostname_query(
+            kernel=app.state.kernel,
+            hostname_process=app.state.hostname_process,
+            telemetry=app.state.telemetry,
             hostname_query=request.hostname.strip(),
             session_id=session_id
         )

@@ -22,22 +22,10 @@ class AnswerStep(KernelProcessStep):
     Formats SRM recommendations with relevant details and confidence scores.
     '''
     
-    _kernel: Kernel = None
-    
     class OutputEvents(Enum):
         '''Output events from the answer step.'''
         AnswerPublished = "AnswerPublished"
         FallbackAnswer = "FallbackAnswer"
-    
-    @classmethod
-    def set_kernel(cls, kernel: Kernel):
-        '''Set the kernel for all instances of this step.'''
-        cls._kernel = kernel
-    
-    @property
-    def kernel(self) -> Kernel:
-        '''Get the kernel instance.'''
-        return self.__class__._kernel
     
     @kernel_function(name="format_answer")
     async def format_answer(

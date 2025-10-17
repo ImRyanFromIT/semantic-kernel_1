@@ -20,21 +20,9 @@ class RerankStep(KernelProcessStep):
     and selects the top recommendations based on semantic understanding.
     '''
     
-    _kernel: Kernel = None
-    
     class OutputEvents(Enum):
         '''Output events from the rerank step.'''
         RecommendationSelected = "RecommendationSelected"
-    
-    @classmethod
-    def set_kernel(cls, kernel: Kernel):
-        '''Set the kernel for all instances of this step.'''
-        cls._kernel = kernel
-    
-    @property
-    def kernel(self) -> Kernel:
-        '''Get the kernel instance.'''
-        return self.__class__._kernel
     
     @kernel_function(name="rerank_candidates")
     async def rerank_candidates(
@@ -57,6 +45,9 @@ class RerankStep(KernelProcessStep):
         
         debug_print(f"DEBUG RerankStep: Called with {len(candidates) if candidates else 0} candidates, session_id='{session_id}'")
         
+        # Get kernel from input_data
+        kernel = input_data.get('kernel')
+        
         if not candidates:
             # No candidates to rerank
             await context.emit_event(
@@ -68,12 +59,13 @@ class RerankStep(KernelProcessStep):
                     "user_query": user_query,
                     "vector_store": vector_store,
                     "session_id": session_id,
+                    "kernel": kernel,
                 },
             )
             return
         
-        # Use LLM to score candidates
-        scored_candidates = await self._llm_score_candidates(candidates, user_query)
+        # Use LLM to score candidates - get kernel from input_data
+        scored_candidates = await self._llm_score_candidates(candidates, user_query, kernel)
         
         # Sort by LLM score
         scored_candidates.sort(key=lambda x: x['llm_score'], reverse=True)
@@ -97,16 +89,18 @@ class RerankStep(KernelProcessStep):
                 "user_query": user_query,
                 "vector_store": vector_store,
                 "session_id": session_id,
+                "kernel": kernel,
             }
         )
     
-    async def _llm_score_candidates(self, candidates: list[dict], user_query: str) -> list[dict]:
+    async def _llm_score_candidates(self, candidates: list[dict], user_query: str, kernel: Kernel) -> list[dict]:
         '''
         Use LLM to score candidates based on semantic relevance.
         
         Args:
             candidates: List of candidate SRMs
             user_query: User's query
+            kernel: Semantic Kernel instance
             
         Returns:
             List of candidates with LLM scores
@@ -120,12 +114,12 @@ class RerankStep(KernelProcessStep):
             candidates_text += f"    Team: {candidate['owning_team']}\n"
         
         # Get the reranking plugin
-        rerank_plugin = self.kernel.get_plugin("semantic_reranker")
+        rerank_plugin = kernel.get_plugin("semantic_reranker")
         rerank_function = rerank_plugin["semantic_reranking"]
         
         try:
             # Call LLM to score candidates
-            result = await self.kernel.invoke(
+            result = await kernel.invoke(
                 rerank_function,
                 user_query=user_query,
                 candidates=candidates_text

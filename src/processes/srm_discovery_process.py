@@ -37,30 +37,24 @@ class SRMDiscoveryProcess:
     
     @staticmethod
     def create_process(
-        kernel: Kernel,
-        vector_store: VectorStoreBase,
         process_name: str = "SRMDiscoveryProcess"
     ) -> ProcessBuilder:
         '''
         Create the SRM Discovery process.
         
         Args:
-            kernel: The Semantic Kernel instance
-            vector_store: The vector store containing SRM records
             process_name: Name for the process
             
         Returns:
             ProcessBuilder configured with all steps and transitions
+            
+        Note:
+            Kernel and vector_store are passed via initial_event data
         '''
         # Create process builder
         process_builder = ProcessBuilder(name=process_name)
         
-        ValidationStep.set_kernel(kernel)
-        ClarityStep.set_kernel(kernel)
-        RerankStep.set_kernel(kernel)
-        AnswerStep.set_kernel(kernel)
-        
-        # Add steps
+        # Add steps (kernel will be available through process context)
         validation_step = process_builder.add_step(ValidationStep)
         clarity_step = process_builder.add_step(ClarityStep)
         retrieval_step = process_builder.add_step(RetrievalStep)
