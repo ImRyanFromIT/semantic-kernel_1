@@ -122,7 +122,12 @@ class AnswerStep(KernelProcessStep):
         Returns:
             Formatted markdown answer
         '''
+        # Include SRM_ID in the response for frontend tracking
+        srm_id = selected.get('srm_id', '')
+        
         answer = f"""## Recommended SRM: {selected['name']}
+
+**SRM ID:** {srm_id}
 
 **Category:** {selected['category']}
 
@@ -139,7 +144,8 @@ class AnswerStep(KernelProcessStep):
         if alternatives:
             answer += "\n### Alternative Options:\n\n"
             for i, alt in enumerate(alternatives[:2], 1):
-                answer += f"{i}. **{alt['name']}** ({alt['category']}) - {alt['use_case']}\n"
+                alt_id = alt.get('srm_id', '')
+                answer += f"{i}. **{alt['name']}** (ID: {alt_id}, {alt['category']}) - {alt['use_case']}\n"
                 if alt.get('url'):
                     answer += f"   **URL:** {alt['url']}\n"
         

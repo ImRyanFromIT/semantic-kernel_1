@@ -23,6 +23,9 @@ from src.utils.debug_config import debug_print
 from src.data.data_loader import SRMDataLoader
 from src.processes.srm_discovery_process import SRMDiscoveryProcess
 from src.processes.hostname_lookup_process import HostnameLookupProcess
+from src.memory.feedback_store import FeedbackStore
+from src.utils.feedback_processor import FeedbackProcessor
+from src.models.feedback_record import FeedbackRecord, FeedbackType
 
 
 # FastAPI app
@@ -52,6 +55,26 @@ class HostnameResponse(BaseModel):
     '''Response model for hostname lookup endpoint.'''
     response: str
     session_id: str
+
+
+class FeedbackRequest(BaseModel):
+    '''Request model for feedback endpoint.'''
+    session_id: str
+    incorrect_srm_id: str | None = None
+    incorrect_srm_name: str | None = None
+    correct_srm_id: str | None = None
+    correct_srm_name: str | None = None
+    feedback_text: str | None = None
+    feedback_type: str = "negative"  # positive, negative, correction
+    user_id: str | None = None
+    query: str = ""
+
+
+class FeedbackResponse(BaseModel):
+    '''Response model for feedback endpoint.'''
+    success: bool
+    message: str
+    feedback_id: str | None = None
 
 
 @app.on_event("startup")
@@ -100,6 +123,15 @@ async def startup_event():
     # Initialize telemetry
     app.state.telemetry = TelemetryLogger()
     
+    # Initialize feedback system
+    print("[*] Initializing feedback system...")
+    app.state.feedback_store = FeedbackStore()
+    app.state.feedback_processor = FeedbackProcessor(
+        feedback_store=app.state.feedback_store,
+        vector_store=app.state.vector_store
+    )
+    print("[+] Feedback system initialized")
+    
     print("[+] AI Concierge ready!")
 
 
@@ -125,7 +157,7 @@ async def run_query(
     Returns:
         The final answer or clarification question
     '''
-    # Create initial event data with user_query, vector_store, session_id, and kernel
+    # Create initial event data with user_query, vector_store, session_id, kernel, and feedback_processor
     # Note: SK ProcessBuilder requires passing dependencies through events, not constructors
     # result_container will be populated by steps with the final output
     result_container = {}
@@ -135,6 +167,7 @@ async def run_query(
         "session_id": session_id,
         "kernel": kernel,
         "result_container": result_container,
+        "feedback_processor": app.state.feedback_processor,
     }
     
     # Start process
@@ -352,6 +385,99 @@ async def hostname_endpoint(request: HostnameRequest):
     except Exception as e:
         print(f"[!] Error processing hostname lookup: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing hostname lookup: {str(e)}")
+
+
+@app.post("/api/feedback", response_model=FeedbackResponse)
+async def feedback_endpoint(request: FeedbackRequest):
+    '''
+    Handle user feedback on SRM recommendations.
+    
+    Args:
+        request: FeedbackRequest containing feedback details
+        
+    Returns:
+        FeedbackResponse with success status and feedback ID
+    '''
+    try:
+        # Determine feedback type
+        if request.correct_srm_id:
+            feedback_type = FeedbackType.CORRECTION
+        elif request.feedback_type == "positive":
+            feedback_type = FeedbackType.POSITIVE
+        else:
+            feedback_type = FeedbackType.NEGATIVE
+        
+        # Create feedback record
+        feedback = FeedbackRecord(
+            session_id=request.session_id,
+            user_id=request.user_id,
+            query=request.query,
+            incorrect_srm_id=request.incorrect_srm_id,
+            incorrect_srm_name=request.incorrect_srm_name,
+            correct_srm_id=request.correct_srm_id,
+            correct_srm_name=request.correct_srm_name,
+            feedback_text=request.feedback_text,
+            feedback_type=feedback_type,
+        )
+        
+        # Store feedback
+        app.state.feedback_store.add_feedback(feedback)
+        
+        # Log telemetry
+        app.state.telemetry.log_feedback_submitted(
+            session_id=request.session_id,
+            feedback_id=feedback.id,
+            feedback_type=feedback_type.value,
+            incorrect_srm_id=request.incorrect_srm_id,
+            correct_srm_id=request.correct_srm_id,
+            user_id=request.user_id
+        )
+        
+        # Process feedback asynchronously (don't wait)
+        asyncio.create_task(
+            _process_feedback_async(
+                feedback=feedback,
+                feedback_processor=app.state.feedback_processor,
+                telemetry=app.state.telemetry
+            )
+        )
+        
+        return FeedbackResponse(
+            success=True,
+            message="Thank you for your feedback! We'll use this to improve future recommendations.",
+            feedback_id=feedback.id
+        )
+    
+    except Exception as e:
+        print(f"[!] Error processing feedback: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing feedback: {str(e)}")
+
+
+async def _process_feedback_async(
+    feedback: FeedbackRecord,
+    feedback_processor: FeedbackProcessor,
+    telemetry: TelemetryLogger
+):
+    '''
+    Process feedback asynchronously in the background.
+    
+    Args:
+        feedback: FeedbackRecord to process
+        feedback_processor: FeedbackProcessor instance
+        telemetry: TelemetryLogger instance
+    '''
+    try:
+        success = await feedback_processor.process_feedback(feedback)
+        telemetry.log_feedback_processed(
+            feedback_id=feedback.id,
+            success=success
+        )
+    except Exception as e:
+        telemetry.log_feedback_processed(
+            feedback_id=feedback.id,
+            success=False,
+            error_message=str(e)
+        )
 
 
 @app.get("/", response_class=HTMLResponse)

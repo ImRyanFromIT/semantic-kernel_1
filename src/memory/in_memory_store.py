@@ -102,4 +102,31 @@ class InMemoryVectorStore(VectorStoreBase):
         
         result = await self.collection.get(record_id)
         return result
+    
+    async def update_feedback_scores(
+        self, 
+        srm_id: str, 
+        query: str, 
+        feedback_type: str,
+        user_id: str | None = None
+    ) -> None:
+        '''
+        Update SRM record with feedback metadata.
+        
+        For in-memory store, we store feedback in memory and apply adjustments
+        during search operations. Since we can't easily modify the embeddings,
+        we'll store feedback metadata for use in reranking.
+        
+        Args:
+            srm_id: ID of the SRM to update
+            query: Query associated with the feedback
+            feedback_type: Type of feedback ('positive' or 'negative')
+            user_id: Optional user ID for personalized adjustments
+        '''
+        # For in-memory store, feedback is primarily handled through
+        # the FeedbackStore and applied during reranking
+        # This is a no-op as we don't modify the in-memory records directly
+        # The feedback processor will use FeedbackStore to influence reranking
+        print(f"[*] Feedback recorded for SRM {srm_id} ({feedback_type})")
+        print(f"[*] Feedback will be applied during reranking phase")
 

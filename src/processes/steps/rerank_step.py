@@ -38,11 +38,11 @@ class RerankStep(KernelProcessStep):
         input_data: dict,
     ) -> None:
         '''
-        Rerank candidates using LLM semantic analysis.
+        Rerank candidates using LLM semantic analysis with feedback integration.
         
         Args:
             context: Process step context
-            input_data: Dictionary containing candidates, user_query, session_id
+            input_data: Dictionary containing candidates, user_query, session_id, feedback_processor
         '''
         # Extract data from input
         candidates = input_data.get('candidates', [])
@@ -51,8 +51,23 @@ class RerankStep(KernelProcessStep):
         vector_store = input_data.get('vector_store')
         kernel = input_data.get('kernel')
         result_container = input_data.get('result_container', {})
+        feedback_processor = input_data.get('feedback_processor')
         
         logger.info("Reranking candidates", extra={"session_id": session_id, "candidate_count": len(candidates) if candidates else 0})
+        
+        # Get feedback context for this query if feedback_processor is available
+        feedback_context = None
+        if feedback_processor:
+            feedback_context = feedback_processor.get_feedback_for_query_context(user_query)
+            if feedback_context.get('has_feedback'):
+                logger.info(
+                    "Applying feedback to reranking", 
+                    extra={
+                        "session_id": session_id, 
+                        "negative_srms": len(feedback_context.get('negative_srms', [])),
+                        "positive_srms": len(feedback_context.get('positive_srms', []))
+                    }
+                )
         
         if not candidates:
             # No candidates to rerank
@@ -75,7 +90,14 @@ class RerankStep(KernelProcessStep):
         # Use LLM to score candidates using kernel from input_data
         scored_candidates = await self._llm_score_candidates(candidates, user_query, kernel)
         
-        # Sort by LLM score
+        # Apply feedback adjustments to scores
+        if feedback_context and feedback_context.get('has_feedback'):
+            scored_candidates = self._apply_feedback_adjustments(
+                scored_candidates, 
+                feedback_context
+            )
+        
+        # Sort by adjusted LLM score
         scored_candidates.sort(key=lambda x: x['llm_score'], reverse=True)
         
         top_scores = [c['llm_score'] for c in scored_candidates[:3]]
@@ -164,6 +186,53 @@ class RerankStep(KernelProcessStep):
                 # Normalize BM25 score (typically 0-10) to 0-100
                 candidate['llm_score'] = min(100, candidate.get('score', 0) * 10)
                 candidate['llm_reasoning'] = 'Fallback to BM25 score'
+        
+        return candidates
+    
+    def _apply_feedback_adjustments(
+        self, 
+        candidates: list[dict], 
+        feedback_context: dict
+    ) -> list[dict]:
+        '''
+        Apply feedback-based score adjustments to candidates.
+        
+        Args:
+            candidates: List of scored candidates
+            feedback_context: Feedback context with positive/negative SRM lists
+            
+        Returns:
+            List of candidates with adjusted scores
+        '''
+        negative_srms = set(feedback_context.get('negative_srms', []))
+        positive_srms = set(feedback_context.get('positive_srms', []))
+        
+        for candidate in candidates:
+            srm_id = candidate.get('srm_id', '')
+            
+            # Apply penalties for negative feedback
+            if srm_id in negative_srms:
+                # Reduce score by 30% for negative feedback
+                penalty = candidate['llm_score'] * 0.3
+                candidate['llm_score'] = max(0, candidate['llm_score'] - penalty)
+                candidate['feedback_adjusted'] = True
+                candidate['adjustment_type'] = 'negative'
+                logger.debug(
+                    f"Applied negative feedback penalty to {candidate.get('name', 'unknown')}: "
+                    f"-{penalty:.1f} points"
+                )
+            
+            # Apply boosts for positive feedback
+            if srm_id in positive_srms:
+                # Increase score by 40% for positive feedback
+                boost = candidate['llm_score'] * 0.4
+                candidate['llm_score'] = min(100, candidate['llm_score'] + boost)
+                candidate['feedback_adjusted'] = True
+                candidate['adjustment_type'] = 'positive'
+                logger.debug(
+                    f"Applied positive feedback boost to {candidate.get('name', 'unknown')}: "
+                    f"+{boost:.1f} points"
+                )
         
         return candidates
     

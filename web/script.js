@@ -111,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Parse recommended SRM
         const nameMatch = markdown.match(/##\s+Recommended SRM:\s+(.+)/);
+        const srmIdMatch = markdown.match(/\*\*SRM ID:\*\*\s+(.+)/);
         const categoryMatch = markdown.match(/\*\*Category:\*\*\s+(.+)/);
         const useCaseMatch = markdown.match(/\*\*Use Case:\*\*\s+(.+)/);
         const owningTeamMatch = markdown.match(/\*\*Owning Team:\*\*\s+(.+)/);
@@ -124,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const result = {
             type: 'success',
             name: nameMatch[1].trim(),
+            srmId: srmIdMatch ? srmIdMatch[1].trim() : null,
             category: categoryMatch ? categoryMatch[1].trim() : '',
             useCase: useCaseMatch ? useCaseMatch[1].trim() : '',
             owningTeam: owningTeamMatch ? owningTeamMatch[1].trim() : '',
@@ -138,16 +140,17 @@ document.addEventListener('DOMContentLoaded', () => {
             let currentAlt = null;
             
             for (const line of altLines) {
-                // Match numbered alternatives: "1. **Name** (Category) - Use case"
-                const altMatch = line.match(/^\d+\.\s+\*\*(.+?)\*\*\s+\((.+?)\)\s+-\s+(.+)/);
+                // Match numbered alternatives: "1. **Name** (ID: SRM-XXX, Category) - Use case"
+                const altMatch = line.match(/^\d+\.\s+\*\*(.+?)\*\*\s+\(ID:\s+(.+?),\s+(.+?)\)\s+-\s+(.+)/);
                 if (altMatch) {
                     if (currentAlt) {
                         result.alternatives.push(currentAlt);
                     }
                     currentAlt = {
                         name: altMatch[1].trim(),
-                        category: altMatch[2].trim(),
-                        useCase: altMatch[3].trim(),
+                        srmId: altMatch[2].trim(),
+                        category: altMatch[3].trim(),
+                        useCase: altMatch[4].trim(),
                         url: ''
                     };
                 } else if (currentAlt && line.includes('**URL:**')) {
@@ -206,6 +209,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return { type: 'hostname_info', message: markdown };
     };
 
+    // Store current session and query for feedback
+    let currentSession = {
+        sessionId: null,
+        query: null,
+        selectedSrm: null,
+        alternatives: []
+    };
+    
     const renderResults = (parsedResult) => {
         resultsContainer.innerHTML = '';
         
@@ -317,6 +328,18 @@ document.addEventListener('DOMContentLoaded', () => {
             
             cardContent += `</ol></div>`;
         }
+        
+        // Add feedback buttons
+        cardContent += `
+            <div class="feedback-buttons">
+                <button class="feedback-btn feedback-positive" data-action="positive">
+                    <span class="feedback-icon">👍</span> This is correct
+                </button>
+                <button class="feedback-btn feedback-negative" data-action="negative">
+                    <span class="feedback-icon">👎</span> Not quite right
+                </button>
+            </div>
+        `;
         
         // Add footer note
         cardContent += `<p class="srm-footer">If this doesn't match your need, please provide more details and I'll search again.</p>`;
@@ -463,13 +486,35 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoadingState(true, isHostname);
         
         try {
-            const markdown = isHostname 
-                ? await realBackendHostnameSearch(processedQuery)
-                : await realBackendSearch(query);
+            const response = await fetch(isHostname ? '/api/hostname' : '/api/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(isHostname ? { hostname: processedQuery } : { query })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const markdown = data.response;
+            
+            // Store session info for feedback
+            currentSession.sessionId = data.session_id;
+            currentSession.query = query;
             
             const parsedResult = isHostname 
                 ? parseHostnameResponse(markdown)
                 : parseMarkdownResponse(markdown);
+            
+            // Store selected SRM and alternatives
+            if (parsedResult.type === 'success') {
+                currentSession.selectedSrm = {
+                    name: parsedResult.name,
+                    id: parsedResult.srmId || parsedResult.name // Use actual SRM_ID if available
+                };
+                currentSession.alternatives = parsedResult.alternatives || [];
+            }
             
             isHostname ? renderHostnameResults(parsedResult) : renderResults(parsedResult);
         } catch (error) {
@@ -481,6 +526,134 @@ document.addEventListener('DOMContentLoaded', () => {
             searchBtn.disabled = false;
             searchBtn.textContent = originalButtonText;
             searchBtn.classList.remove('searching');
+        }
+    };
+    
+    const submitFeedback = async (feedbackType, correctSrm = null, feedbackText = '') => {
+        try {
+            const feedbackData = {
+                session_id: currentSession.sessionId,
+                query: currentSession.query,
+                feedback_type: feedbackType,
+                incorrect_srm_id: feedbackType === 'positive' ? null : currentSession.selectedSrm?.id,
+                incorrect_srm_name: feedbackType === 'positive' ? null : currentSession.selectedSrm?.name,
+                correct_srm_id: correctSrm?.id || null,
+                correct_srm_name: correctSrm?.name || null,
+                feedback_text: feedbackText
+            };
+            
+            const response = await fetch('/api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(feedbackData)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Feedback API error: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            // Show success message
+            showFeedbackToast(result.message || 'Thank you for your feedback!');
+            
+            return true;
+        } catch (error) {
+            console.error('Feedback error:', error);
+            showFeedbackToast('Failed to submit feedback. Please try again.', 'error');
+            return false;
+        }
+    };
+    
+    const showFeedbackToast = (message, type = 'success') => {
+        const toast = document.createElement('div');
+        toast.className = `feedback-toast feedback-toast-${type}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.classList.add('show'), 10);
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    };
+    
+    const openFeedbackModal = () => {
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'feedback-modal';
+        modal.id = 'feedback-modal';
+        
+        let alternativesHtml = '';
+        if (currentSession.alternatives && currentSession.alternatives.length > 0) {
+            alternativesHtml = currentSession.alternatives.map((alt, idx) => 
+                `<option value="${idx}">${sanitize(alt.name)}</option>`
+            ).join('');
+        }
+        
+        modal.innerHTML = `
+            <div class="feedback-modal-content">
+                <div class="feedback-modal-header">
+                    <h2>Help us improve</h2>
+                    <button class="feedback-modal-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="feedback-modal-body">
+                    <p>We recommended: <strong>${sanitize(currentSession.selectedSrm?.name || 'Unknown')}</strong></p>
+                    <p>What should we have recommended instead?</p>
+                    
+                    <label for="correct-srm-select">Select the correct SRM:</label>
+                    <select id="correct-srm-select">
+                        <option value="">-- Choose from alternatives --</option>
+                        ${alternativesHtml}
+                        <option value="other">Something else (specify below)</option>
+                    </select>
+                    
+                    <label for="feedback-text">Additional details (optional):</label>
+                    <textarea id="feedback-text" rows="3" placeholder="e.g., 'I needed X instead of Y because...'"></textarea>
+                </div>
+                <div class="feedback-modal-footer">
+                    <button class="btn-cancel">Cancel</button>
+                    <button class="btn-submit">Submit Feedback</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        setTimeout(() => modal.classList.add('show'), 10);
+        
+        // Event listeners
+        modal.querySelector('.feedback-modal-close').addEventListener('click', closeFeedbackModal);
+        modal.querySelector('.btn-cancel').addEventListener('click', closeFeedbackModal);
+        modal.querySelector('.btn-submit').addEventListener('click', async () => {
+            const selectElem = document.getElementById('correct-srm-select');
+            const textElem = document.getElementById('feedback-text');
+            const selectedIdx = selectElem.value;
+            
+            let correctSrm = null;
+            if (selectedIdx && selectedIdx !== 'other') {
+                const alt = currentSession.alternatives[parseInt(selectedIdx)];
+                correctSrm = { id: alt.srmId || alt.name, name: alt.name };
+            }
+            
+            const success = await submitFeedback('correction', correctSrm, textElem.value);
+            if (success) {
+                closeFeedbackModal();
+            }
+        });
+        
+        // Close on background click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeFeedbackModal();
+            }
+        });
+    };
+    
+    const closeFeedbackModal = () => {
+        const modal = document.getElementById('feedback-modal');
+        if (modal) {
+            modal.classList.remove('show');
+            setTimeout(() => modal.remove(), 300);
         }
     };
 
@@ -500,6 +673,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const query = e.target.textContent;
             input.value = query;
             runSearch(query);
+        }
+    });
+    
+    // Event delegation for feedback buttons
+    resultsContainer.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.feedback-btn');
+        if (!btn) return;
+        
+        const action = btn.dataset.action;
+        
+        if (action === 'positive') {
+            // Submit positive feedback immediately
+            await submitFeedback('positive');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="feedback-icon">✓</span> Thank you!';
+        } else if (action === 'negative') {
+            // Open modal for correction
+            openFeedbackModal();
         }
     });
     

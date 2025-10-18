@@ -213,4 +213,131 @@ class AzureAISearchStore(VectorStoreBase):
         except Exception as e:
             print(f"Error retrieving document {record_id}: {e}")
             return None
+    
+    async def update_feedback_scores(
+        self, 
+        srm_id: str, 
+        query: str, 
+        feedback_type: str,
+        user_id: str | None = None
+    ) -> None:
+        '''
+        Update document with feedback metadata.
+        
+        For Azure AI Search, we store feedback as metadata in the document.
+        The srm_id should be the SRM_ID field (e.g., "SRM-053") from the index.
+        
+        Args:
+            srm_id: SRM_ID from the index (e.g., "SRM-053")
+            query: Query associated with the feedback
+            feedback_type: Type of feedback ('positive' or 'negative')
+            user_id: Optional user ID for personalized adjustments
+        '''
+        try:
+            # For Azure AI Search, we need to find the document by SRM_ID field
+            # since the 'id' field might be different from SRM_ID
+            
+            # Search for the document by SRM_ID
+            search_results = self.search_client.search(
+                search_text="*",
+                filter=f"SRM_ID eq '{srm_id}'",
+                select=["id", "SRM_ID", "Name", "AzureSearch_DocumentKey"],
+                top=1
+            )
+            
+            doc_id = None
+            azure_doc_key = None
+            for result in search_results:
+                doc_id = result.get('id')
+                azure_doc_key = result.get('AzureSearch_DocumentKey')
+                break
+            
+            if not doc_id:
+                print(f"[!] Document with SRM_ID '{srm_id}' not found for feedback update")
+                print(f"[*] Feedback is still recorded and will be used in reranking")
+                return
+            
+            # Azure Search keys can only contain letters, digits, underscore (_), dash (-), or equal sign (=)
+            # Try different key strategies in order of preference
+            
+            keys_to_try = []
+            
+            # Strategy 1: Use SRM_ID directly (e.g., "SRM-055") - this should be valid
+            keys_to_try.append((srm_id, "SRM_ID"))
+            
+            # Strategy 2: Use the original id field (base64 encoded)
+            if doc_id:
+                keys_to_try.append((doc_id, "id"))
+            
+            # Strategy 3: Extract just the row number from AzureSearch_DocumentKey if it has the pattern
+            if azure_doc_key and ';' in azure_doc_key:
+                row_number = azure_doc_key.split(';')[-1]
+                if row_number.isdigit():
+                    keys_to_try.append((f"row_{row_number}", "row_number"))
+            
+            doc = None
+            successful_key = None
+            successful_key_type = None
+            
+            for key_to_try, key_type in keys_to_try:
+                try:
+                    doc = self.search_client.get_document(key=key_to_try)
+                    successful_key = key_to_try
+                    successful_key_type = key_type
+                    break
+                except Exception:
+                    continue
+            
+            if not doc:
+                print(f"[!] Document {doc_id} not found for feedback update")
+                print(f"[*] Feedback is still recorded and will be used in reranking")
+                return
+            
+            # Initialize feedback fields if they don't exist or are None
+            if 'negative_feedback_queries' not in doc or doc['negative_feedback_queries'] is None:
+                doc['negative_feedback_queries'] = []
+            if 'positive_feedback_queries' not in doc or doc['positive_feedback_queries'] is None:
+                doc['positive_feedback_queries'] = []
+            if 'feedback_score_adjustment' not in doc or doc['feedback_score_adjustment'] is None:
+                doc['feedback_score_adjustment'] = 0.0
+            
+            # Update feedback metadata
+            if feedback_type == 'negative':
+                if query not in doc['negative_feedback_queries']:
+                    doc['negative_feedback_queries'].append(query)
+                # Lower score by 0.1 for each negative feedback
+                doc['feedback_score_adjustment'] -= 0.1
+            elif feedback_type == 'positive':
+                if query not in doc['positive_feedback_queries']:
+                    doc['positive_feedback_queries'].append(query)
+                # Boost score by 0.2 for each positive feedback
+                doc['feedback_score_adjustment'] += 0.2
+            elif feedback_type == 'reset':
+                # Reset all feedback fields (used by feedback wipe utility)
+                doc['negative_feedback_queries'] = []
+                doc['positive_feedback_queries'] = []
+                doc['feedback_score_adjustment'] = 0.0
+            
+            # Ensure the document has the correct key field for the update
+            # Azure Search needs the key field to match what was used for retrieval
+            if successful_key_type == "SRM_ID":
+                # If we used SRM_ID as the key, make sure it's set correctly
+                doc['SRM_ID'] = successful_key
+            elif successful_key_type == "id":
+                # If we used id as the key, make sure it's set correctly  
+                doc['id'] = successful_key
+            elif successful_key_type == "row_number":
+                # If we used a constructed row key, we might need to handle this differently
+                # For now, try to preserve the original structure
+                pass
+            
+            # Update the document
+            self.search_client.merge_or_upload_documents(documents=[doc])
+            print(f"[+] Updated feedback scores for SRM {srm_id} ({feedback_type})")
+            
+        except Exception as e:
+            # Azure AI Search may not support custom fields in the index
+            # Log but don't fail - feedback will still be stored in FeedbackStore
+            print(f"[!] Could not update feedback scores in Azure AI Search: {e}")
+            print(f"[*] Feedback is still recorded and will be used in reranking")
 

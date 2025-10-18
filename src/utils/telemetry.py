@@ -151,4 +151,81 @@ class TelemetryLogger:
             'user_query': user_query,
             'rejection_reason': rejection_reason,
         })
+    
+    def log_feedback_submitted(
+        self,
+        session_id: str,
+        feedback_id: str,
+        feedback_type: str,
+        incorrect_srm_id: str | None,
+        correct_srm_id: str | None,
+        user_id: str | None = None
+    ) -> None:
+        '''
+        Log when user submits feedback on a recommendation.
+        
+        Args:
+            session_id: Session identifier
+            feedback_id: Unique feedback ID
+            feedback_type: Type of feedback (positive/negative/correction)
+            incorrect_srm_id: ID of incorrectly recommended SRM
+            correct_srm_id: ID of correct SRM (if provided)
+            user_id: Optional user identifier
+        '''
+        self.emit({
+            'event_type': 'feedback_submitted',
+            'session_id': session_id,
+            'feedback_id': feedback_id,
+            'feedback_type': feedback_type,
+            'incorrect_srm_id': incorrect_srm_id,
+            'correct_srm_id': correct_srm_id,
+            'user_id': user_id,
+        })
+    
+    def log_feedback_processed(
+        self,
+        feedback_id: str,
+        success: bool,
+        error_message: str | None = None
+    ) -> None:
+        '''
+        Log when feedback is processed and applied to index.
+        
+        Args:
+            feedback_id: Unique feedback ID
+            success: Whether processing was successful
+            error_message: Error message if processing failed
+        '''
+        event = {
+            'event_type': 'feedback_processed',
+            'feedback_id': feedback_id,
+            'success': success,
+        }
+        if error_message:
+            event['error_message'] = error_message
+        self.emit(event)
+    
+    def log_index_updated(
+        self,
+        srm_id: str,
+        update_type: str,
+        query: str,
+        user_id: str | None = None
+    ) -> None:
+        '''
+        Log when search index is updated based on feedback.
+        
+        Args:
+            srm_id: ID of SRM being updated
+            update_type: Type of update (negative/positive)
+            query: Query associated with the feedback
+            user_id: Optional user identifier
+        '''
+        self.emit({
+            'event_type': 'index_updated',
+            'srm_id': srm_id,
+            'update_type': update_type,
+            'query': query,
+            'user_id': user_id,
+        })
 

@@ -97,8 +97,9 @@ class RetrievalStep(KernelProcessStep):
                     })
             else:
                 # Standard SRM record
+                # Use record.srm_id (SRM_ID field from Azure Search) instead of record.id (document key)
                 candidates.append({
-                    'srm_id': record.id,
+                    'srm_id': record.srm_id if hasattr(record, 'srm_id') and record.srm_id else record.id,
                     'name': record.name if hasattr(record, 'name') else '',
                     'category': record.category if hasattr(record, 'category') else 'General',
                     'owning_team': record.owning_team if hasattr(record, 'owning_team') else '',
@@ -122,6 +123,7 @@ class RetrievalStep(KernelProcessStep):
                     "vector_store": vector_store,
                     "kernel": kernel,
                     "result_container": result_container,
+                    "feedback_processor": input_data.get('feedback_processor'),
                 }
             )
         else:

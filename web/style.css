@@ -486,3 +486,268 @@ button, input, select, textarea {
     scroll-behavior: auto !important;
   }
 }
+
+/* ----------------- */
+/* --- FEEDBACK UI --- */
+/* ----------------- */
+
+/* Feedback Buttons */
+.feedback-buttons {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--card-border);
+}
+
+.feedback-btn {
+    flex: 1;
+    padding: 0.625rem 1rem;
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 150ms var(--ease-out);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.feedback-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--highlight-bg);
+    transform: translateY(-1px);
+}
+
+.feedback-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.feedback-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.feedback-icon {
+    font-size: 1.1rem;
+}
+
+.feedback-positive:hover:not(:disabled) {
+    border-color: #28a745;
+    color: #28a745;
+}
+
+.feedback-negative:hover:not(:disabled) {
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+/* Feedback Modal */
+.feedback-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 300ms var(--ease-out);
+    padding: 1rem;
+}
+
+.feedback-modal.show {
+    opacity: 1;
+}
+
+.feedback-modal-content {
+    background: var(--card);
+    border-radius: 8px;
+    max-width: 500px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    transform: scale(0.9);
+    transition: transform 300ms var(--ease-out);
+}
+
+.feedback-modal.show .feedback-modal-content {
+    transform: scale(1);
+}
+
+.feedback-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.feedback-modal-header h2 {
+    font-size: 1.25rem;
+    color: var(--text);
+}
+
+.feedback-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 150ms var(--ease-out);
+}
+
+.feedback-modal-close:hover {
+    background: var(--card-border);
+    color: var(--text);
+}
+
+.feedback-modal-body {
+    padding: 1.5rem;
+}
+
+.feedback-modal-body p {
+    margin-bottom: 1rem;
+    color: var(--text);
+}
+
+.feedback-modal-body label {
+    display: block;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.feedback-modal-body select,
+.feedback-modal-body textarea {
+    width: 100%;
+    padding: 0.625rem;
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-family);
+    font-size: 0.95rem;
+    transition: border-color 150ms var(--ease-out);
+}
+
+.feedback-modal-body select:focus,
+.feedback-modal-body textarea:focus {
+    outline: none;
+    border-color: var(--focus);
+}
+
+.feedback-modal-body textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.feedback-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    border-top: 1px solid var(--card-border);
+}
+
+.feedback-modal-footer button {
+    padding: 0.625rem 1.25rem;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 150ms var(--ease-out);
+}
+
+.btn-cancel {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    color: var(--text);
+}
+
+.btn-cancel:hover {
+    background: var(--bg);
+}
+
+.btn-submit {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: var(--accent-text);
+}
+
+.btn-submit:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-submit:active {
+    transform: translateY(0);
+}
+
+/* Feedback Toast */
+.feedback-toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1100;
+    max-width: 400px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 300ms var(--ease-out);
+}
+
+.feedback-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.feedback-toast-success {
+    border-left: 4px solid #28a745;
+}
+
+.feedback-toast-error {
+    border-left: 4px solid #dc3545;
+}
+
+@media (max-width: 600px) {
+    .feedback-modal {
+        padding: 0;
+    }
+    
+    .feedback-modal-content {
+        border-radius: 0;
+        max-height: 100vh;
+    }
+    
+    .feedback-buttons {
+        flex-direction: column;
+    }
+    
+    .feedback-toast {
+        bottom: 1rem;
+        right: 1rem;
+        left: 1rem;
+        max-width: none;
+    }
+}

@@ -58,4 +58,23 @@ class VectorStoreBase(ABC):
             The record if found, None otherwise
         '''
         pass
+    
+    @abstractmethod
+    async def update_feedback_scores(
+        self, 
+        srm_id: str, 
+        query: str, 
+        feedback_type: str,
+        user_id: str | None = None
+    ) -> None:
+        '''
+        Update search scores based on user feedback.
+        
+        Args:
+            srm_id: ID of the SRM to update
+            query: Query associated with the feedback
+            feedback_type: Type of feedback ('positive' or 'negative')
+            user_id: Optional user ID for personalized adjustments
+        '''
+        pass
 
