@@ -1,0 +1,23 @@
+Subject: Database Performance SRM Update
+From: david.martinez@company.com
+Date: 2025-10-19T16:30:00Z
+ID: test_email_007
+
+Hi team,
+
+I need to update the "Database Performance Consultation" SRM with new owner notes and recommendation logic.
+
+Owner notes should read:
+
+"Our DBA team provides expert analysis and optimization services for database performance issues. Please include query execution plans, wait statistics, and current resource utilization metrics in your request. Response time: 1-2 business days for standard requests, 4 hours for critical production issues. Contact: dba-team@company.com"
+
+For the hidden recommendation logic, please add:
+- Recommend for keywords: "slow query", "SQL performance", "query tuning", "index optimization", "execution plan", "deadlock", "blocking", "wait statistics", "SQL Server", "PostgreSQL", "MySQL", "database slow", "query timeout", "high CPU database", "TempDB", "table scan"
+- Exclude when mentions: "database backup", "database restore", "database migration", "new database", "database installation", "database security audit"
+
+Reasoning: We're seeing too many routing errors where backup/migration requests come to the performance team. These keywords should help route performance-specific issues correctly.
+
+Best regards,
+David Martinez
+Database Services Team
+

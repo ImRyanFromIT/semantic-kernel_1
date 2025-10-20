@@ -1,0 +1,18 @@
+Subject: Database SRM Hidden Notes Update
+From: sarah.smith@company.com
+Date: 2024-10-18T11:15:00Z
+ID: test_email_002
+
+Hello,
+
+I need to update the hidden notes for the Database Server SRM. Please add the following recommendation logic:
+
+- Recommend this SRM for applications requiring persistent data storage
+- Do NOT recommend for temporary or cache-only workloads
+- Exclude from recommendations for development environments (use lightweight alternatives instead)
+
+The reason for this change is that we've been getting too many requests for database servers for simple dev work, which is expensive and unnecessary.
+
+Best regards,
+Sarah Smith
+Database Team

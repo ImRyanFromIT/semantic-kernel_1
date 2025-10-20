@@ -1,0 +1,23 @@
+Subject: SRM Notes Update Request
+From: sarah.chen@company.com
+Date: 2025-10-19T15:45:00Z
+ID: test_email_006
+
+Hello,
+
+I need to update the owner notes for the "VM Provisionning" SRM (I think I might have misspelled it - it's the one about deploying new virtual machines).
+
+Please change the notes to say:
+
+"Before requesting a new VM, ensure you have completed the VM Request Form (available on the IT portal). All VMs must follow our naming convention: ENV-APP-###. Standard deployment time is 2-3 business days. For Windows VMs, include required licenses in your request."
+
+Also, please add hidden recommendation logic:
+- Recommend for keywords: "deploy VM", "new virtual machine", "VMware", "vSphere", "Hyper-V", "provision server", "need a VM", "create VM", "Windows Server", "Linux VM", "RHEL", "Ubuntu Server"
+- Exclude when query mentions: "decommission", "delete VM", "snapshot", "performance issue", "troubleshooting"
+
+We're getting too many incomplete requests and this should help guide users to the right SRM upfront.
+
+Thanks!
+Sarah Chen
+Virtualization Team
+

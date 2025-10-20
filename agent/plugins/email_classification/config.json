@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "description": "Classifies emails into help, dont_help, or escalate categories for SRM management",
+  "execution_settings": {
+    "default": {
+      "max_tokens": 200,
+      "temperature": 0.1,
+      "top_p": 1.0,
+      "response_format": {"type": "json_object"}
+    }
+  },
+  "input_variables": [
+    {
+      "name": "subject",
+      "description": "Email subject line",
+      "required": true
+    },
+    {
+      "name": "sender", 
+      "description": "Email sender address",
+      "required": true
+    },
+    {
+      "name": "body",
+      "description": "Email body content",
+      "required": true
+    }
+  ],
+  "output_variable": {
+    "description": "JSON object with classification, confidence, and reason"
+  }
+}

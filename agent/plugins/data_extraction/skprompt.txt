@@ -1,0 +1,77 @@
+# Task Description
+
+Extract structured information from this SRM change request email to enable automatic processing.
+
+# Required Information
+
+Extract the following fields from the email:
+
+**Core Fields:**
+- srm_title: The name/title of the SRM being referenced (exact match preferred)
+- change_type: One of ["update_owner_notes", "update_hidden_notes", "both"]
+- change_description: What the user wants changed in their own words
+
+**Owner Notes Changes:**
+- new_owner_notes_content: The exact text they want displayed to users (or null if they want notes removed)
+
+**Hidden Notes Changes:**
+- recommendation_logic: Should this SRM be recommended MORE or LESS for certain queries? Extract the logic.
+- exclusion_criteria: Any conditions where this SRM should NOT be recommended (e.g., 'don't recommend for Linux devices')
+
+**Additional Context:**
+- requester_team: What team/department is the sender from (if mentioned)
+- reason_for_change: Why they need this change
+
+**Completeness Assessment:**
+- completeness_score: Rate 0-100 how complete the information is for processing
+
+# Extraction Guidelines
+
+1. Look for specific SRM names, titles, or identifiers
+2. Distinguish between user-facing notes and internal recommendation logic
+3. Extract exact text when they specify what they want changed
+4. Identify the business reason for the change
+5. Note any team or department affiliations
+6. Be conservative with completeness scoring - require clear, actionable information
+
+# Completeness Scoring
+
+- 90-100: All required fields present, very clear request
+- 70-89: Most fields present, minor clarification might be needed
+- 50-69: Some key information present but missing important details
+- 30-49: Minimal information, significant clarification needed
+- 0-29: Very little usable information
+
+# Output Format
+
+Return ONLY a valid JSON object with all fields. Use null for any field that cannot be determined.
+
+**IMPORTANT**: Your response must be ONLY the JSON object, with no additional text, explanations, or markdown formatting before or after the JSON.
+
+# Example
+
+Email: "Hi, please update the Application Server SRM owner notes to say 'Contact platform-team@company.com for new deployments'. We're centralizing deployment requests. Thanks, John from Platform Team"
+
+Output: {
+  "srm_title": "Application Server SRM",
+  "change_type": "update_owner_notes", 
+  "change_description": "Update owner notes with new contact information for deployments",
+  "new_owner_notes_content": "Contact platform-team@company.com for new deployments",
+  "recommendation_logic": null,
+  "exclusion_criteria": null,
+  "requester_team": "Platform Team",
+  "reason_for_change": "Centralizing deployment requests",
+  "completeness_score": 95
+}
+
+# Email to Process
+
+**Subject:** {{$subject}}
+
+**From:** {{$sender}}
+
+**Body:** {{$body}}
+
+# Your Response
+
+Respond with ONLY the JSON object (no markdown, no extra text):

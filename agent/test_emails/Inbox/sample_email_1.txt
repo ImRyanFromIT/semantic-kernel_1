@@ -1,0 +1,16 @@
+Subject: SRM Update Request - Application Server SRM
+From: john.doe@company.com
+Date: 2024-10-18T10:30:00Z
+ID: test_email_001
+
+Hi SRM Team,
+
+I need to update the Application Server SRM owner notes. Please change the contact information to:
+
+"For deployment requests, contact the Platform Team at platform-team@company.com. Include your project name and target environment in the request."
+
+This change is needed because we're centralizing all deployment requests through the Platform Team starting next month.
+
+Thanks,
+John Doe
+Platform Team Lead

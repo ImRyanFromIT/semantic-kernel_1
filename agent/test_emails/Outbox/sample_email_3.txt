@@ -1,0 +1,15 @@
+Subject: What's the weather like today?
+From: spam@random.com
+Date: 2024-10-18T09:45:00Z
+ID: test_email_003
+
+Hi there,
+
+Just wondering what the weather is like in your area today? I'm planning a picnic and want to know if it's sunny.
+
+Also, have you heard about this amazing new cryptocurrency opportunity? You can make millions overnight!
+
+Click here to learn more: [suspicious-link]
+
+Thanks,
+Random Person

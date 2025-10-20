@@ -1,0 +1,23 @@
+Subject: Update SRM Owner Notes - Storage Expansion
+From: mike.johnson@company.com
+Date: 2025-10-19T14:20:00Z
+ID: test_email_005
+
+Hi SRM Team,
+
+I need to update the owner notes for the "Storage Expansion - SAN/NAS/File Share" SRM.
+
+Please add the following information to the owner notes:
+
+"IMPORTANT: All storage expansion requests must now include a capacity justification and be approved by your director before submission. Please allow 5-7 business days for provisioning after approval. For urgent requests (< 48 hours), contact the Data Storage Team lead directly at storage-urgent@company.com."
+
+Reason for this change: We've had several unauthorized expansion requests that caused budget overruns last quarter. This new process ensures proper capacity planning and budget approval before we provision additional storage resources.
+
+Also, please update the hidden recommendation logic to:
+- Recommend this SRM for keywords: "NetApp", "Dell EMC", "Pure Storage", "SAN expansion", "NAS expansion", "increase LUN size", "expand volume", "add disk shelf", "iSCSI", "Fiber Channel"
+- Exclude from recommendations when query mentions: "new storage", "provision storage", "greenfield", "initial deployment", "first-time setup"
+
+Thanks,
+Mike Johnson
+Data Storage Team Lead
+

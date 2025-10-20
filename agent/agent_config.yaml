@@ -1,0 +1,38 @@
+# SRM Archivist Agent Configuration
+# This is the actual configuration file used by the agent
+
+agent_name: SRM_Archivist_Agent
+description: Monitors email inbox for SRM change requests and updates Azure AI Search index
+state_file: state/agent_state.jsonl
+log_file: state/agent_actions.log
+mock_updates: false  # Set to true to mock updates, false to actually update the index
+
+# Processing configuration
+configuration:
+  email_scan_interval_seconds: 10
+  mass_email_threshold: 20
+  confidence_threshold_for_classification: 70
+  stale_item_hours: 48
+  clarification_wait_hours: 48
+  email_history_window_days: 7
+  max_retries_api_calls: 3
+  retry_delay_seconds: 300
+  
+  # Microsoft Graph API configuration (uses environment variables)
+  graph_api:
+    tenant_id: ${TENANT_ID}
+    client_id: ${CLIENT_ID}
+    client_secret: ${CLIENT_SECRET}
+    mailbox: ${MAILBOX_EMAIL}
+  
+  # Azure AI Search configuration (uses environment variables)
+  azure_search:
+    endpoint: ${AZURE_AI_SEARCH_ENDPOINT}
+    index_name: ${AZURE_AI_SEARCH_INDEX_NAME}
+    api_key: ${AZURE_AI_SEARCH_API_KEY}
+  
+  # LLM configuration
+  llm_config:
+    model: gpt-4
+    temperature: 0.3
+    max_tokens: 1500

@@ -1,0 +1,16 @@
+Subject: SRM Question - Need Help
+From: confused.user@company.com
+Date: 2024-10-18T14:20:00Z
+ID: test_email_004
+
+Hi,
+
+I need help with some server thing but I'm not really sure which SRM I need. My manager said I should email you about getting some kind of infrastructure for our new project.
+
+We're building something that needs to store data and serve web pages, but I don't know the technical details. Can someone help me figure out what I need?
+
+Also, is there a way to get this set up by tomorrow? It's kind of urgent.
+
+Thanks,
+Confused User
+Marketing Team
