@@ -1,16 +1,15 @@
 """
-Production run script for SRM Archivist Agent.
+Run script for SRM Archivist Agent in CHAT MODE.
 
-This script runs the agent in live mode with Microsoft Graph API integration.
-The agent will continuously monitor Sparky@greatvaluelab.com and process
-incoming SRM requests automatically.
+This script runs the agent in interactive chat mode where the human operator
+can interact with the agent, ask questions, and issue commands.
 
 Usage:
     From project root:
-        python agent/run_live_agent.py
+        python agent/run_agent_chat.py
     
     OR from agent directory:
-        python run_live_agent.py
+        python run_agent_chat.py
 """
 
 import asyncio
@@ -34,16 +33,16 @@ from agent.main import SrmArchivistAgent
 
 async def main():
     """
-    Main entry point for production agent.
+    Main entry point for chat mode agent.
     
-    Runs the agent in live mode with continuous email monitoring.
+    Runs the agent in interactive chat mode.
     """
     # Create logger
     logger = logging.getLogger(__name__)
     
     try:
         logger.info("="*60)
-        logger.info("Starting SRM Archivist Agent - LIVE MODE")
+        logger.info("Starting SRM Archivist Agent - CHAT MODE")
         logger.info("="*60)
         
         # Verify environment configuration
@@ -64,23 +63,19 @@ async def main():
         logger.info("Configuration validated successfully")
         logger.info(f"Mailbox: {config.graph_api.mailbox}")
         logger.info(f"Support Team: {config.support_team_email}")
-        logger.info(f"Scan Interval: {config.email_scan_interval_seconds} seconds")
-        logger.info(f"Update Mode: {'LIVE' if not config.mock_updates else 'MOCK'}")
         logger.info("-"*60)
         
-        # Create agent in LIVE mode
+        # Create agent in CHAT mode
         agent = SrmArchivistAgent(
             config_file="agent_config.yaml",
-            test_mode=False  # Force live mode
+            test_mode=False,
+            chat_mode=True  # Enable chat mode
         )
         
-        logger.info("Starting agent in autonomous mode...")
-        logger.info("="*60)
-        logger.info("AGENT IS NOW RUNNING")
-        logger.info("Press Ctrl+C to stop")
+        logger.info("Starting agent in chat mode...")
         logger.info("="*60)
         
-        # Run agent monitoring loop (will initialize internally)
+        # Run agent in chat mode (will initialize internally)
         await agent.run()
         
     except KeyboardInterrupt:
@@ -100,13 +95,21 @@ if __name__ == "__main__":
     state_dir.mkdir(exist_ok=True)
     log_file = state_dir / 'agent_actions.log'
     
+    # Configure logging with UTF-8 encoding to handle emojis
+    file_handler = logging.FileHandler(str(log_file), encoding='utf-8')
+    stream_handler = logging.StreamHandler(sys.stdout)
+    
+    # Set UTF-8 encoding for stream handler if possible
+    try:
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    except:
+        pass  # If this fails, just continue with default encoding
+    
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(str(log_file)),
-            logging.StreamHandler(sys.stdout)
-        ]
+        handlers=[file_handler, stream_handler]
     )
     
     # Run the async main function

@@ -62,10 +62,10 @@ class SearchPlugin:
                 self._client = "mock_client"
     
     @kernel_function(
-        description="Search for SRM documents by title or keywords",
+        description="Search for SRM documents in Azure AI Search index by title or keywords. Returns list of matching SRMs with their SRM_ID, Name, and other fields. Use this to find the SRM mentioned in a change request.",
         name="search_srm"
     )
-    async def search_srm(self, query: str, top_k: int = 5) -> str:
+    async def search_srm(self, query: str, top_k: int = 10) -> str:
         """
         Search for SRM documents in the index.
         
@@ -166,7 +166,7 @@ class SearchPlugin:
             return f"Document retrieval failed: {e}"
     
     @kernel_function(
-        description="Update SRM document fields in the search index",
+        description="Update SRM document fields in Azure AI Search index. IMPORTANT: After the user confirms they want to update an SRM, you MUST call this function to actually apply the changes. Pass the SRM_ID (like 'SRM-051') as document_id and the changes as a JSON string. Example: document_id='SRM-051', updates='{\"owner_notes\": \"New note text\"}'",
         name="update_srm_document"
     )
     async def update_srm_document(self, document_id: str, updates: str) -> str:
@@ -178,13 +178,38 @@ class SearchPlugin:
             updates: JSON string of field updates
             
         Returns:
-            Success or error message
+            JSON string with update result including before/after values
         """
         try:
             self._initialize_client()
             
             # Parse updates
             update_data = json.loads(updates)
+            
+            # First, retrieve the current document to capture "before" state
+            before_state = {}
+            srm_title = None
+            
+            if not self.mock_updates and self._client and self._client != "mock_client":
+                try:
+                    # Get current document
+                    doc_result = self._client.get_document(key=document_id)
+                    if doc_result:
+                        srm_title = doc_result.get('SRM_Title') or doc_result.get('srm_title')
+                        # Capture before values for fields being updated
+                        for field in update_data.keys():
+                            # Map field names to index schema
+                            if field in ["owner_notes", "Owner_Notes"]:
+                                before_state["owner_notes"] = doc_result.get('owner_notes', '')
+                            elif field in ["hidden_notes", "Hidden_Notes"]:
+                                before_state["hidden_notes"] = doc_result.get('hidden_notes', '')
+                            else:
+                                before_state[field] = doc_result.get(field, '')
+                except Exception as e:
+                    # If we can't get the before state, log warning but continue
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Could not retrieve before state for {document_id}: {e}")
             
             @self.error_handler.with_retry(ErrorType.AZURE_SEARCH_OPERATION)
             def _update():
@@ -197,7 +222,7 @@ class SearchPlugin:
                     f"{'[MOCK UPDATE]' if self.mock_updates else '[LIVE UPDATE]'} "
                     f"{'Would update' if self.mock_updates else 'Updating'} Azure AI Search index\n"
                     f"{'='*80}\n"
-                    f"Document ID: {document_id}\n"
+                    f"SRM_ID: {document_id}\n"
                     f"Index: {self.index_name}\n"
                     f"Fields to update:\n"
                 )
@@ -218,12 +243,32 @@ class SearchPlugin:
                 if not self.mock_updates:
                     if self._client and self._client != "mock_client":
                         try:
-                            # Prepare update document
+                            # SRM_ID is the KEY field in this index
+                            # Prepare update document using SRM_ID as the key
                             update_doc = {
-                                "SRM_ID": document_id,
+                                "SRM_ID": document_id,  # SRM_ID is the key field in your index
                                 "@search.action": "merge"
                             }
-                            update_doc.update(update_data)
+                            
+                            # Map field names to match index schema (lowercase with underscores)
+                            mapped_updates = {}
+                            for field, value in update_data.items():
+                                # Convert owner_notes/hidden_notes to match index schema
+                                if field == "owner_notes":
+                                    mapped_updates["owner_notes"] = value
+                                elif field == "hidden_notes":
+                                    mapped_updates["hidden_notes"] = value
+                                elif field == "Owner_Notes":
+                                    mapped_updates["owner_notes"] = value
+                                elif field == "Hidden_Notes":
+                                    mapped_updates["hidden_notes"] = value
+                                else:
+                                    mapped_updates[field] = value
+                            
+                            update_doc.update(mapped_updates)
+                            
+                            logger.info(f"Updating document with SRM_ID: {document_id}")
+                            logger.info(f"Mapped update fields: {list(mapped_updates.keys())}")
                             
                             # Upload to index
                             result = self._client.upload_documents(documents=[update_doc])
@@ -251,19 +296,58 @@ class SearchPlugin:
             result = _update()
             
             if result.get("succeeded"):
-                return f"Document {document_id} updated successfully"
+                # Build structured response with before/after values
+                changes = []
+                for field, after_value in update_data.items():
+                    # Normalize field name
+                    normalized_field = field
+                    if field in ["Owner_Notes", "owner_notes"]:
+                        normalized_field = "owner_notes"
+                    elif field in ["Hidden_Notes", "hidden_notes"]:
+                        normalized_field = "hidden_notes"
+                    
+                    changes.append({
+                        "field": normalized_field,
+                        "before": before_state.get(normalized_field, ""),
+                        "after": after_value
+                    })
+                
+                response = {
+                    "success": True,
+                    "srm_id": document_id,
+                    "srm_title": srm_title or document_id,
+                    "changes": changes,
+                    "mocked": result.get("mocked", False)
+                }
+                
+                return json.dumps(response, indent=2)
             else:
-                return f"Failed to update document {document_id}"
+                error_response = {
+                    "success": False,
+                    "srm_id": document_id,
+                    "error": result.get("error", "Unknown error")
+                }
+                return json.dumps(error_response, indent=2)
                 
         except json.JSONDecodeError as e:
-            return f"Invalid JSON in updates: {e}"
+            error_response = {
+                "success": False,
+                "srm_id": document_id,
+                "error": f"Invalid JSON in updates: {e}"
+            }
+            return json.dumps(error_response, indent=2)
         except Exception as e:
             self.error_handler.handle_error(
                 ErrorType.AZURE_SEARCH_OPERATION,
                 e,
                 "update_srm_document"
             )
-            return f"Document update failed: {e}"
+            error_response = {
+                "success": False,
+                "srm_id": document_id,
+                "error": f"Document update failed: {e}"
+            }
+            return json.dumps(error_response, indent=2)
     
     @kernel_function(
         description="Find SRM documents with similarity score above threshold",

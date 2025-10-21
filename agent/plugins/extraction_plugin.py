@@ -81,7 +81,7 @@ class ExtractionPlugin:
             )
     
     @kernel_function(
-        description="Extract structured SRM change request data from email",
+        description="Extract structured data from an SRM change request email: srm_title, new_owner_notes_content, recommendation_logic, exclusion_criteria, reason_for_change. Returns JSON with extracted fields and completeness score.",
         name="extract_change_request"
     )
     async def extract_change_request(self, 

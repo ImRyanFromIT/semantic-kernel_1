@@ -12,7 +12,7 @@ Extract the following fields from the email:
 - change_description: What the user wants changed in their own words
 
 **Owner Notes Changes:**
-- new_owner_notes_content: The exact text they want displayed to users (or null if they want notes removed)
+- new_owner_notes_content: The exact text they want displayed to users (or null if they want notes removed). IMPORTANT: Extract ONLY the owner notes section. Do NOT include any "Alternative Options", "### Alternative Options:", or similar sections - those should be excluded from owner notes.
 
 **Hidden Notes Changes:**
 - recommendation_logic: Should this SRM be recommended MORE or LESS for certain queries? Extract the logic.
@@ -30,9 +30,10 @@ Extract the following fields from the email:
 1. Look for specific SRM names, titles, or identifiers
 2. Distinguish between user-facing notes and internal recommendation logic
 3. Extract exact text when they specify what they want changed
-4. Identify the business reason for the change
-5. Note any team or department affiliations
-6. Be conservative with completeness scoring - require clear, actionable information
+4. **CRITICAL: When extracting owner notes, STOP at section dividers like "### Alternative Options:", "Alternative Options:", or similar. Owner notes should contain ONLY the owner notes text, NOT alternative options or other sections.**
+5. Identify the business reason for the change
+6. Note any team or department affiliations
+7. Be conservative with completeness scoring - require clear, actionable information
 
 # Completeness Scoring
 
@@ -50,18 +51,27 @@ Return ONLY a valid JSON object with all fields. Use null for any field that can
 
 # Example
 
-Email: "Hi, please update the Application Server SRM owner notes to say 'Contact platform-team@company.com for new deployments'. We're centralizing deployment requests. Thanks, John from Platform Team"
+Email: "Hi, please update the VM Provisioning SRM owner notes. 
+
+OWNER NOTES:
+IMPORTANT: All VM requests must include capacity justification and director approval. Allow 5-7 days for provisioning.
+
+### Alternative Options:
+1. VM Capacity Planning (SRM-045)
+2. VM Snapshot Management (SRM-043)
+
+Thanks, Sarah from Infrastructure Team"
 
 Output: {
-  "srm_title": "Application Server SRM",
+  "srm_title": "VM Provisioning SRM",
   "change_type": "update_owner_notes", 
-  "change_description": "Update owner notes with new contact information for deployments",
-  "new_owner_notes_content": "Contact platform-team@company.com for new deployments",
+  "change_description": "Update owner notes with approval requirements",
+  "new_owner_notes_content": "IMPORTANT: All VM requests must include capacity justification and director approval. Allow 5-7 days for provisioning.",
   "recommendation_logic": null,
   "exclusion_criteria": null,
-  "requester_team": "Platform Team",
-  "reason_for_change": "Centralizing deployment requests",
-  "completeness_score": 95
+  "requester_team": "Infrastructure Team",
+  "reason_for_change": null,
+  "completeness_score": 90
 }
 
 # Email to Process

@@ -106,6 +106,8 @@ class RetrievalStep(KernelProcessStep):
                     'use_case': record.use_case if hasattr(record, 'use_case') else '',
                     'score': result.score,
                     'url': record.url if hasattr(record, 'url') else '',
+                    'owner_notes': record.owner_notes if hasattr(record, 'owner_notes') else '',
+                    'hidden_notes': record.hidden_notes if hasattr(record, 'hidden_notes') else '',
                 })
         
         logger.info("Candidate search completed", extra={"session_id": session_id, "candidate_count": len(candidates)})

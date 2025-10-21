@@ -80,7 +80,7 @@ class ClassificationPlugin:
             )
     
     @kernel_function(
-        description="Classify email into help, dont_help, or escalate category",
+        description="Classify an email into three categories: 'help' (processable SRM change requests), 'dont_help' (off-topic/spam), or 'escalate' (ambiguous/uncertain). Returns JSON with classification, confidence, and reason.",
         name="classify_email"
     )
     async def classify_email(self, 

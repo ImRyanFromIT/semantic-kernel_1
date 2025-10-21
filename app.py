@@ -7,6 +7,8 @@ Web-based interface for the AI assistant.
 import asyncio
 import uuid
 from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Dict, Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -15,6 +17,7 @@ from pydantic import BaseModel
 
 from semantic_kernel.processes.kernel_process import KernelProcessEvent
 from semantic_kernel.processes.local_runtime.local_kernel_process import start
+from semantic_kernel.contents import ChatHistory
 
 from src.utils.kernel_builder import create_kernel
 from src.utils.telemetry import TelemetryLogger
@@ -77,6 +80,19 @@ class FeedbackResponse(BaseModel):
     feedback_id: str | None = None
 
 
+class SrmUpdateChatRequest(BaseModel):
+    '''Request model for SRM update chat endpoint.'''
+    session_id: str | None = None
+    message: str
+
+
+class SrmUpdateChatResponse(BaseModel):
+    '''Response model for SRM update chat endpoint.'''
+    session_id: str
+    response: str
+    status: str  # "active" | "completed" | "escalated"
+
+
 @app.on_event("startup")
 async def startup_event():
     '''
@@ -131,6 +147,31 @@ async def startup_event():
         vector_store=app.state.vector_store
     )
     print("[+] Feedback system initialized")
+    
+    # Initialize SRM Archivist Agent for chat-based updates
+    print("[*] Initializing SRM Archivist Agent for chat...")
+    from agent.main import SrmArchivistAgent
+    
+    # Initialize agent in chat-only mode (no email monitoring)
+    app.state.agent = SrmArchivistAgent(
+        config_file="agent/agent_config.yaml",
+        test_mode=False,
+        chat_mode=True
+    )
+    
+    # Initialize agent (but don't start the run loop)
+    agent_initialized = await app.state.agent.initialize()
+    if agent_initialized:
+        print("[+] SRM Archivist Agent initialized for chat-based updates")
+    else:
+        print("[!] Warning: SRM Archivist Agent failed to initialize")
+    
+    # Initialize session storage for multi-turn conversations
+    app.state.chat_sessions: Dict[str, Dict[str, Any]] = {}
+    print("[+] Chat session management initialized")
+    
+    # Start background task for session cleanup
+    asyncio.create_task(_cleanup_old_sessions())
     
     print("[+] AI Concierge ready!")
 
@@ -478,6 +519,146 @@ async def _process_feedback_async(
             success=False,
             error_message=str(e)
         )
+
+
+async def _cleanup_old_sessions():
+    '''
+    Background task to clean up old chat sessions (>1 hour inactive).
+    '''
+    while True:
+        try:
+            await asyncio.sleep(300)  # Check every 5 minutes
+            
+            current_time = datetime.now()
+            sessions_to_delete = []
+            
+            for session_id, session_data in app.state.chat_sessions.items():
+                last_activity = session_data.get('last_activity', session_data.get('created_at'))
+                if current_time - last_activity > timedelta(hours=1):
+                    sessions_to_delete.append(session_id)
+            
+            for session_id in sessions_to_delete:
+                del app.state.chat_sessions[session_id]
+                print(f"[*] Cleaned up inactive chat session: {session_id}")
+        
+        except Exception as e:
+            print(f"[!] Error in session cleanup: {e}")
+
+
+@app.post("/api/srm-update-chat", response_model=SrmUpdateChatResponse)
+async def srm_update_chat_endpoint(request: SrmUpdateChatRequest):
+    '''
+    Handle conversational SRM update requests.
+    
+    Args:
+        request: SrmUpdateChatRequest with session_id and message
+        
+    Returns:
+        SrmUpdateChatResponse with agent's response and session status
+    '''
+    if not request.message or not request.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    
+    # Get or create session
+    session_id = request.session_id or str(uuid.uuid4())
+    
+    if session_id not in app.state.chat_sessions:
+        # Create new session
+        app.state.chat_sessions[session_id] = {
+            'session_id': session_id,
+            'chat_history': ChatHistory(),
+            'created_at': datetime.now(),
+            'last_activity': datetime.now(),
+            'context': {},
+            'status': 'active'
+        }
+        
+        # Add initial system message to guide the agent
+        system_prompt = (
+            "You are helping a user update an SRM document. Be conversational and concise.\n\n"
+            "CRITICAL PROCESS:\n"
+            "1. Ask which SRM to update, then call search_srm to find it\n"
+            "2. Show the user what you found (name and SRM_ID)\n"
+            "3. Ask what changes to make (owner_notes or hidden_notes)\n"
+            "4. Ask why the change is needed\n"
+            "5. Summarize the changes and ask for confirmation\n"
+            "6. IMPORTANT: After user confirms, IMMEDIATELY call update_srm_document\n"
+            "   - document_id = the SRM_ID you found (e.g., 'SRM-051')\n"
+            "   - updates = JSON string like '{\"owner_notes\": \"text here\"}'\n"
+            "7. SAVE the JSON response from update_srm_document - you'll need it for notifications\n"
+            "8. Report the result, then ask: 'Would you like me to send a notification email about this change?'\n"
+            "9. If user says yes, ask for email address(es) (only @greatvaluelab.com allowed)\n"
+            "10. CRITICAL: When user provides email, DO NOT just say you'll send it\n"
+            "    - STOP and IMMEDIATELY call send_update_notification(recipients=<email>, changes_json=<saved_json>, requester_name=\"User\")\n"
+            "    - WAIT for function to return\n"
+            "    - Report ONLY what the function actually returned\n"
+            "    - WRONG: 'Notification sent successfully' (you didn't call the function - this is a lie!)\n"
+            "    - RIGHT: Call the function, get result, report result\n\n"
+            "REMEMBER: You have real functions - USE them, don't just describe using them!"
+        )
+        app.state.chat_sessions[session_id]['chat_history'].add_system_message(system_prompt)
+        print(f"[*] Created new chat session: {session_id}")
+    
+    session = app.state.chat_sessions[session_id]
+    session['last_activity'] = datetime.now()
+    
+    try:
+        # Add user message to the session's chat history
+        session['chat_history'].add_user_message(request.message)
+        
+        # Invoke agent with session-specific chat history
+        from semantic_kernel.contents import ChatMessageContent
+        
+        response_text = ""
+        last_message = None
+        
+        async for message in app.state.agent.agent.invoke(
+            session['chat_history'],
+            settings=app.state.agent.execution_settings
+        ):
+            # Message could be ChatMessageContent or streaming content
+            if isinstance(message, ChatMessageContent):
+                last_message = message
+                response_text += str(message.content) if message.content else ""
+            elif hasattr(message, 'content'):
+                response_text += str(message.content)
+            else:
+                response_text += str(message)
+        
+        # Add the final assistant message to session's history
+        if last_message:
+            session['chat_history'].add_message(last_message)
+        elif response_text:
+            session['chat_history'].add_assistant_message(response_text)
+        
+        # Determine session status from response
+        status = session['status']
+        if "updated successfully" in response_text.lower() or "update completed" in response_text.lower():
+            status = "completed"
+            session['status'] = "completed"
+        elif "escalat" in response_text.lower() or "forward" in response_text.lower():
+            status = "escalated"
+            session['status'] = "escalated"
+        
+        return SrmUpdateChatResponse(
+            session_id=session_id,
+            response=response_text,
+            status=status
+        )
+    
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"[!] Error in SRM update chat: {e}")
+        print(f"[!] Traceback: {error_details}")
+        
+        # Log to file as well
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in SRM update chat: {e}")
+        logger.error(f"Traceback: {error_details}")
+        
+        raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
 
 
 @app.get("/", response_class=HTMLResponse)

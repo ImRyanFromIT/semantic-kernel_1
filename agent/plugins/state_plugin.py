@@ -58,7 +58,7 @@ class StatePlugin:
             return f"Failed to load state: {e}"
     
     @kernel_function(
-        description="Find email records that need resuming (in-progress or awaiting)",
+        description="Find incomplete email records that need to be resumed. Check this at the start of each cycle to continue interrupted work.",
         name="find_resumable_records"
     )
     def find_resumable_records(self) -> str:
@@ -83,7 +83,7 @@ class StatePlugin:
             return f"Failed to find resumable records: {e}"
     
     @kernel_function(
-        description="Find stale email records that need escalation",
+        description="Find email records that haven't been updated in many hours (default 48). These likely need escalation to humans.",
         name="find_stale_records"
     )
     def find_stale_records(self, hours: int = 48) -> str:

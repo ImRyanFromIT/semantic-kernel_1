@@ -4,6 +4,7 @@ Microsoft Graph client wrapper for email operations.
 
 import asyncio
 import json
+import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
@@ -13,6 +14,9 @@ from msgraph.generated.users.item.messages.messages_request_builder import Messa
 from kiota_abstractions.base_request_configuration import RequestConfiguration
 
 from .file_email_reader import FileEmailReader
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
 def _run_async_safe(coro):
@@ -74,6 +78,11 @@ class GraphClient:
         self._client = None
         self._authenticated = False
         
+        # Rate limiting protection - add delay between API calls
+        # Azure Sweden endpoint: 50 requests/minute = 1.2 seconds minimum between requests
+        self._last_api_call = None
+        self._min_delay_between_calls = 1.5  # 1.5 seconds between calls (safer than 1.2s minimum)
+        
         # Initialize file email reader for test mode
         if self.test_mode:
             self.file_reader = FileEmailReader()
@@ -125,6 +134,14 @@ class GraphClient:
             self._authenticated = False
             raise Exception(f"Graph API authentication failed: {e}")
     
+    async def _rate_limit_delay(self):
+        """Add delay between API calls to avoid rate limiting."""
+        if self._last_api_call is not None:
+            elapsed = asyncio.get_event_loop().time() - self._last_api_call
+            if elapsed < self._min_delay_between_calls:
+                await asyncio.sleep(self._min_delay_between_calls - elapsed)
+        self._last_api_call = asyncio.get_event_loop().time()
+    
     async def _fetch_emails_async(self, 
                                    days_back: int = 7, 
                                    processed_email_ids: List[str] = None) -> List[Dict[str, Any]]:
@@ -139,6 +156,9 @@ class GraphClient:
             List of email dictionaries with required fields
         """
         processed_email_ids = processed_email_ids or []
+        
+        # Rate limiting protection
+        await self._rate_limit_delay()
         
         # Calculate date filter for emails
         cutoff_date = datetime.utcnow() - timedelta(days=days_back)
@@ -156,10 +176,20 @@ class GraphClient:
             query_parameters=query_params
         )
         
-        # Fetch messages from Inbox folder only (excludes Deleted Items, Sent Items, etc.)
-        messages_response = await self._client.users.by_user_id(self.mailbox).mail_folders.by_mail_folder_id("Inbox").messages.get(
-            request_configuration=request_config
-        )
+        try:
+            # Fetch messages from Inbox folder only (excludes Deleted Items, Sent Items, etc.)
+            messages_response = await self._client.users.by_user_id(self.mailbox).mail_folders.by_mail_folder_id("Inbox").messages.get(
+                request_configuration=request_config
+            )
+        except Exception as e:
+            error_str = str(e).lower()
+            # Check for rate limiting (429 status code)
+            if "429" in error_str or "rate limit" in error_str or "throttl" in error_str:
+                logger.warning(f"Rate limit hit when fetching emails. Waiting 60 seconds before retry...")
+                await asyncio.sleep(60)
+                raise Exception(f"Rate limited by Microsoft Graph API: {e}")
+            else:
+                raise
         
         emails = []
         if messages_response and messages_response.value:
@@ -188,7 +218,7 @@ class GraphClient:
                 
                 emails.append(email_data)
         
-        print(f"Fetched {len(emails)} new emails from {self.mailbox}")
+        logger.info(f"Fetched {len(emails)} new emails from {self.mailbox}")
         return emails
     
     async def fetch_emails_async(self, 
@@ -277,6 +307,9 @@ class GraphClient:
         Returns:
             True if email sent successfully
         """
+        # Rate limiting protection
+        await self._rate_limit_delay()
+        
         # Import required classes
         from msgraph.generated.users.item.send_mail.send_mail_post_request_body import SendMailPostRequestBody
         from msgraph.generated.models.message import Message
@@ -315,10 +348,20 @@ class GraphClient:
         request_body.message = message
         request_body.save_to_sent_items = True
         
-        # Send email (await the async call)
-        await self._client.users.by_user_id(self.mailbox).send_mail.post(body=request_body)
+        try:
+            # Send email (await the async call)
+            await self._client.users.by_user_id(self.mailbox).send_mail.post(body=request_body)
+        except Exception as e:
+            error_str = str(e).lower()
+            # Check for rate limiting (429 status code)
+            if "429" in error_str or "rate limit" in error_str or "throttl" in error_str:
+                logger.warning(f"Rate limit hit when sending email. Waiting 60 seconds before retry...")
+                await asyncio.sleep(60)
+                raise Exception(f"Rate limited by Microsoft Graph API: {e}")
+            else:
+                raise
         
-        print(f"Successfully sent email to {to_address}")
+        logger.info(f"Successfully sent email to {to_address}")
         return True
     
     def send_email(self, 
@@ -358,6 +401,46 @@ class GraphClient:
         except Exception as e:
             raise Exception(f"Failed to send email: {e}")
     
+    async def send_email_async(self,
+                               to_address: str,
+                               subject: str,
+                               body: str,
+                               cc_addresses: List[str] = None) -> bool:
+        """
+        Async version: Send a new email.
+        
+        Use this from async code (like the agent).
+        From sync code, use send_email() instead.
+        
+        Args:
+            to_address: Recipient email address
+            subject: Email subject
+            body: Email body content
+            cc_addresses: Optional CC recipients
+            
+        Returns:
+            True if email sent successfully, False otherwise
+            
+        Raises:
+            Exception: If API call fails
+        """
+        if not self._authenticated:
+            raise Exception("Not authenticated. Call authenticate() first.")
+        
+        try:
+            if self.test_mode:
+                # In test mode, just log the email
+                print(f"[TEST MODE] Would send email to {to_address}")
+                print(f"Subject: {subject}")
+                print(f"Body: {body[:100]}...")
+                return True
+            
+            # Call async implementation directly
+            return await self._send_email_async(to_address, subject, body, cc_addresses)
+            
+        except Exception as e:
+            raise Exception(f"Failed to send email: {e}")
+    
     async def _reply_to_email_async(self, email_id: str, reply_body: str) -> bool:
         """
         Async implementation to reply to an email.
@@ -369,6 +452,9 @@ class GraphClient:
         Returns:
             True if reply sent successfully
         """
+        # Rate limiting protection
+        await self._rate_limit_delay()
+        
         # Import required classes
         from msgraph.generated.users.item.messages.item.reply.reply_post_request_body import ReplyPostRequestBody
         from msgraph.generated.models.message import Message
@@ -388,12 +474,22 @@ class GraphClient:
         reply_request = ReplyPostRequestBody()
         reply_request.message = message
         
-        # Send reply using Graph API (await the async call)
-        await self._client.users.by_user_id(self.mailbox).messages.by_message_id(email_id).reply.post(
-            body=reply_request
-        )
+        try:
+            # Send reply using Graph API (await the async call)
+            await self._client.users.by_user_id(self.mailbox).messages.by_message_id(email_id).reply.post(
+                body=reply_request
+            )
+        except Exception as e:
+            error_str = str(e).lower()
+            # Check for rate limiting (429 status code)
+            if "429" in error_str or "rate limit" in error_str or "throttl" in error_str:
+                logger.warning(f"Rate limit hit when replying to email. Waiting 60 seconds before retry...")
+                await asyncio.sleep(60)
+                raise Exception(f"Rate limited by Microsoft Graph API: {e}")
+            else:
+                raise
         
-        print(f"Successfully sent reply to email {email_id}")
+        logger.info(f"Successfully sent reply to email {email_id}")
         return True
     
     async def reply_to_email_async(self, email_id: str, reply_body: str) -> bool:
@@ -474,6 +570,9 @@ class GraphClient:
         Returns:
             True if email forwarded successfully
         """
+        # Rate limiting protection
+        await self._rate_limit_delay()
+        
         # Import required classes
         from msgraph.generated.users.item.messages.item.forward.forward_post_request_body import ForwardPostRequestBody
         from msgraph.generated.models.recipient import Recipient
@@ -492,12 +591,22 @@ class GraphClient:
             recipients.append(recipient)
         forward_request.to_recipients = recipients
         
-        # Forward email (await the async call)
-        await self._client.users.by_user_id(self.mailbox).messages.by_message_id(email_id).forward.post(
-            body=forward_request
-        )
+        try:
+            # Forward email (await the async call)
+            await self._client.users.by_user_id(self.mailbox).messages.by_message_id(email_id).forward.post(
+                body=forward_request
+            )
+        except Exception as e:
+            error_str = str(e).lower()
+            # Check for rate limiting (429 status code)
+            if "429" in error_str or "rate limit" in error_str or "throttl" in error_str:
+                logger.warning(f"Rate limit hit when forwarding email. Waiting 60 seconds before retry...")
+                await asyncio.sleep(60)
+                raise Exception(f"Rate limited by Microsoft Graph API: {e}")
+            else:
+                raise
         
-        print(f"Successfully forwarded email {email_id} to {', '.join(to_addresses)}")
+        logger.info(f"Successfully forwarded email {email_id} to {', '.join(to_addresses)}")
         return True
     
     async def forward_email_async(self, email_id: str, to_addresses: List[str], comment: str = "") -> bool:
@@ -581,6 +690,9 @@ class GraphClient:
         Returns:
             True if successful
         """
+        # Rate limiting protection
+        await self._rate_limit_delay()
+        
         # Import required classes
         from msgraph.generated.models.message import Message
         
@@ -588,10 +700,20 @@ class GraphClient:
         message = Message()
         message.is_read = True
         
-        # Update message (await the async call)
-        await self._client.users.by_user_id(self.mailbox).messages.by_message_id(email_id).patch(message)
+        try:
+            # Update message (await the async call)
+            await self._client.users.by_user_id(self.mailbox).messages.by_message_id(email_id).patch(message)
+        except Exception as e:
+            error_str = str(e).lower()
+            # Check for rate limiting (429 status code)
+            if "429" in error_str or "rate limit" in error_str or "throttl" in error_str:
+                logger.warning(f"Rate limit hit when marking email as read. Waiting 60 seconds before retry...")
+                await asyncio.sleep(60)
+                raise Exception(f"Rate limited by Microsoft Graph API: {e}")
+            else:
+                raise
         
-        print(f"Marked email {email_id} as read")
+        logger.info(f"Marked email {email_id} as read")
         return True
     
     def mark_as_read(self, email_id: str) -> bool:

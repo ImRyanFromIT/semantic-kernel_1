@@ -140,6 +140,14 @@ class AnswerStep(KernelProcessStep):
         if selected.get('url'):
             answer += f"\n**URL:** {selected['url']}\n"
         
+        # Add Owner Notes if available
+        if selected.get('owner_notes'):
+            answer += f"\n**Owner Notes:** {selected['owner_notes']}\n"
+        
+        # Add Hidden Notes if available (for internal reference)
+        if selected.get('hidden_notes'):
+            answer += f"\n**Hidden Notes:** {selected['hidden_notes']}\n"
+        
         # Always show 2 alternative options
         if alternatives:
             answer += "\n### Alternative Options:\n\n"
