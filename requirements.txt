@@ -7,3 +7,4 @@ azure-search-documents
 fastapi
 uvicorn
 msgraph-sdk
+pytest

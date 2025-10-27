@@ -18,14 +18,15 @@ from pydantic import BaseModel
 from semantic_kernel.processes.kernel_process import KernelProcessEvent
 from semantic_kernel.processes.local_runtime.local_kernel_process import start
 from semantic_kernel.contents import ChatHistory
+from semantic_kernel.contents.utils.author_role import AuthorRole
 
 from src.utils.kernel_builder import create_kernel
 from src.utils.telemetry import TelemetryLogger
 from src.utils.store_factory import create_vector_store
 from src.utils.debug_config import debug_print
 from src.data.data_loader import SRMDataLoader
-from src.processes.srm_discovery_process import SRMDiscoveryProcess
-from src.processes.hostname_lookup_process import HostnameLookupProcess
+from src.processes.discovery.srm_discovery_process import SRMDiscoveryProcess
+from src.processes.discovery.hostname_lookup_process import HostnameLookupProcess
 from src.memory.feedback_store import FeedbackStore
 from src.utils.feedback_processor import FeedbackProcessor
 from src.models.feedback_record import FeedbackRecord, FeedbackType
@@ -91,6 +92,9 @@ class SrmUpdateChatResponse(BaseModel):
     session_id: str
     response: str
     status: str  # "active" | "completed" | "escalated"
+
+
+# Removed apply_sliding_window_to_session - using ChatHistoryManager instead
 
 
 @app.on_event("startup")
@@ -563,16 +567,9 @@ async def srm_update_chat_endpoint(request: SrmUpdateChatRequest):
     session_id = request.session_id or str(uuid.uuid4())
     
     if session_id not in app.state.chat_sessions:
-        # Create new session
-        app.state.chat_sessions[session_id] = {
-            'session_id': session_id,
-            'chat_history': ChatHistory(),
-            'created_at': datetime.now(),
-            'last_activity': datetime.now(),
-            'context': {},
-            'status': 'active'
-        }
-        
+        # Create new session with ChatHistoryManager for automatic reduction
+        from agent.utils.chat_history_manager import ChatHistoryManager
+
         # Add initial system message to guide the agent
         system_prompt = (
             "You are helping a user update an SRM document. Be conversational and concise.\n\n"
@@ -596,24 +593,47 @@ async def srm_update_chat_endpoint(request: SrmUpdateChatRequest):
             "    - RIGHT: Call the function, get result, report result\n\n"
             "REMEMBER: You have real functions - USE them, don't just describe using them!"
         )
-        app.state.chat_sessions[session_id]['chat_history'].add_system_message(system_prompt)
+
+        # Create ChatHistory with system prompt
+        initial_history = ChatHistory()
+        initial_history.add_system_message(system_prompt)
+
+        # Create ChatHistoryManager with automatic reduction
+        chat_manager = ChatHistoryManager(
+            history=initial_history,
+            max_messages=50,
+            max_tokens=4000,
+            enable_summarization=False,  # Use sliding window for web chat
+            kernel=app.state.kernel
+        )
+
+        app.state.chat_sessions[session_id] = {
+            'session_id': session_id,
+            'chat_manager': chat_manager,
+            'created_at': datetime.now(),
+            'last_activity': datetime.now(),
+            'status': 'active'
+        }
         print(f"[*] Created new chat session: {session_id}")
-    
+
     session = app.state.chat_sessions[session_id]
     session['last_activity'] = datetime.now()
     
     try:
-        # Add user message to the session's chat history
-        session['chat_history'].add_user_message(request.message)
-        
-        # Invoke agent with session-specific chat history
+        # Get chat manager from session
+        chat_manager = session['chat_manager']
+
+        # Add user message through manager (handles automatic reduction)
+        chat_manager.add_user_message(request.message)
+
+        # Invoke agent with managed chat history
         from semantic_kernel.contents import ChatMessageContent
-        
+
         response_text = ""
         last_message = None
-        
+
         async for message in app.state.agent.agent.invoke(
-            session['chat_history'],
+            chat_manager.get_history(),
             settings=app.state.agent.execution_settings
         ):
             # Message could be ChatMessageContent or streaming content
@@ -624,13 +644,13 @@ async def srm_update_chat_endpoint(request: SrmUpdateChatRequest):
                 response_text += str(message.content)
             else:
                 response_text += str(message)
-        
-        # Add the final assistant message to session's history
+
+        # Add the final assistant message through manager (handles automatic reduction)
         if last_message:
-            session['chat_history'].add_message(last_message)
+            chat_manager.add_message(last_message)
         elif response_text:
-            session['chat_history'].add_assistant_message(response_text)
-        
+            chat_manager.add_assistant_message(response_text)
+
         # Determine session status from response
         status = session['status']
         if "updated successfully" in response_text.lower() or "update completed" in response_text.lower():

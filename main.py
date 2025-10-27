@@ -15,8 +15,8 @@ from src.utils.telemetry import TelemetryLogger
 from src.utils.store_factory import create_vector_store
 from src.utils.debug_config import debug_print
 from src.data.data_loader import SRMDataLoader
-from src.processes.srm_discovery_process import SRMDiscoveryProcess
-from src.processes.hostname_lookup_process import HostnameLookupProcess
+from src.processes.discovery.srm_discovery_process import SRMDiscoveryProcess
+from src.processes.discovery.hostname_lookup_process import HostnameLookupProcess
 
 
 async def initialize_system():

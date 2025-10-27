@@ -83,9 +83,9 @@ def load_prompt_plugin(
 
 def load_all_plugins(kernel: Kernel, base_path: Optional[str] = None) -> None:
     '''
-    Load all plugins from the src/plugins directory.
-    
-    This function loads all standard plugins used by the system:
+    Load all plugins from the src/plugins/discovery directory.
+
+    This function loads all standard plugins used by the discovery system:
     - content_validation (input guardrails for SRM queries)
     - hostname_validation (input validation for hostname lookups)
     - intent_detection
@@ -93,16 +93,16 @@ def load_all_plugins(kernel: Kernel, base_path: Optional[str] = None) -> None:
     - query_classification (clarity)
     - response_generation (clarification_question)
     - semantic_reranking (LLM-based candidate reranking)
-    
+
     Args:
         kernel: Semantic Kernel instance to register plugins with
-        base_path: Optional base path for plugins (defaults to src/plugins)
+        base_path: Optional base path for plugins (defaults to src/plugins/discovery)
     '''
     # Determine base path
     if base_path is None:
         # Assume we're running from project root
         current_dir = Path(__file__).parent.parent.parent
-        base_path = current_dir / 'src' / 'plugins'
+        base_path = current_dir / 'src' / 'plugins' / 'discovery'
     else:
         base_path = Path(base_path)
     

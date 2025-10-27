@@ -1,4 +1,0 @@
-# This folder stores agent state files
-# - agent_state.jsonl: Tracks processed emails and agent state
-# - agent_actions.log: Agent operation log
-# - agent_state.jsonl.backup: Backup of state file for recovery

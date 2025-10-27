@@ -208,3 +208,8 @@ __marimo__/
 
 
 /logs
+
+# Application state files
+src/state/*.jsonl
+src/state/*.log
+src/state/*.backup
