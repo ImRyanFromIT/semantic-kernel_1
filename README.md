@@ -361,14 +361,6 @@ This project uses:
 - **Microsoft Graph**: Email integration
 - **Pydantic**: Data validation
 
-## Support
-
-For issues or questions:
-- Check the API documentation at `/docs`
-- Review the plugin architecture in `PLUGINS_README.md`
-- Examine telemetry logs for debugging
-- Contact the support team configured in your environment
-
 ---
 
 Built with Microsoft Semantic Kernel for Python
