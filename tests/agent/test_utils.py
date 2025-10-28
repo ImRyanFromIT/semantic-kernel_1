@@ -9,10 +9,10 @@ import os
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
-from ..utils.state_manager import StateManager
-from ..utils.error_handler import ErrorHandler, ErrorType
-from ..utils.graph_client import GraphClient
-from ..models.email_record import EmailRecord, EmailStatus
+from src.utils.state_manager import StateManager
+from src.utils.error_handler import ErrorHandler, ErrorType
+from src.utils.graph_client import GraphClient
+from src.models.email_record import EmailRecord, EmailStatus
 
 
 class TestStateManager:

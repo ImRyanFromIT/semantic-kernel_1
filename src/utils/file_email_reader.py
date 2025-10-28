@@ -1,7 +1,7 @@
 """
 File-based email reader for testing without Microsoft Graph API.
 
-Reads emails from text files in the Test/ directory.
+Reads emails from text files in the tests/fixtures/test_emails/Inbox/ directory.
 """
 
 import os
@@ -24,10 +24,10 @@ class FileEmailReader:
     <email_body>
     """
     
-    def __init__(self, test_directory: str = "test_emails/Inbox"):
+    def __init__(self, test_directory: str = "tests/fixtures/test_emails/Inbox"):
         """
         Initialize file email reader.
-        
+
         Args:
             test_directory: Directory containing email text files
         """

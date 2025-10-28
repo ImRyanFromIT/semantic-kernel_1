@@ -375,24 +375,53 @@ class ClassifyEmailsStep(KernelProcessStep[ClassifyStepState]):
                         f"  From: {email['sender']}"
                     )
 
-                    # Classify the email
-                    classification_result = await classification_plugin["classify_email"].invoke(
-                        kernel=kernel,
-                        subject=email["subject"],
-                        sender=email["sender"],
-                        body=email["body"]
+                    # Classify the email using kernel.invoke_prompt with proper settings
+                    from src.utils.execution_settings import CLASSIFICATION_SETTINGS
+                    from src.models.llm_outputs import EmailClassification
+
+                    prompt = f"""Classify this email for SRM help desk processing:
+
+Subject: {email['subject']}
+From: {email['sender']}
+Body: {email['body'][:1000]}
+
+Determine if this is:
+- help: An SRM-related request we can handle
+- dont_help: Out of scope (not SRM-related)
+- escalate: Requires human intervention
+
+Provide classification, confidence (0-100), and reasoning in JSON format:
+{{"classification": "help|dont_help|escalate", "confidence": 0-100, "reason": "explanation"}}"""
+
+                    result = await kernel.invoke_prompt(
+                        prompt=prompt,
+                        settings=CLASSIFICATION_SETTINGS
                     )
 
-                    classification = json.loads(str(classification_result))
+                    # Parse to structured model with error handling
+                    try:
+                        classification_obj = EmailClassification.model_validate_json(str(result))
+                        classification = {
+                            "classification": classification_obj.classification,
+                            "confidence": classification_obj.confidence,
+                            "reason": classification_obj.reason
+                        }
+                    except Exception as e:
+                        logger.error(f"Failed to parse classification for {email['email_id']}: {e}")
+                        # Fallback to escalate on parsing failure
+                        classification = {
+                            "classification": "escalate",
+                            "confidence": 0,
+                            "reason": f"Classification parsing failed: {e}"
+                        }
 
                     # Validate confidence threshold
-                    validated_result = await classification_plugin["validate_classification"].invoke(
-                        kernel=kernel,
-                        classification_result=json.dumps(classification),
-                        confidence_threshold=config.confidence_threshold_for_classification
-                    )
-
-                    classification = json.loads(str(validated_result))
+                    if classification['confidence'] < config.confidence_threshold_for_classification:
+                        logger.warning(
+                            f"Low confidence ({classification['confidence']}%) for {email['email_id']}, escalating"
+                        )
+                        classification['classification'] = "escalate"
+                        classification['reason'] = f"Low confidence ({classification['confidence']}%): {classification['reason']}"
 
                 # Log classification result with emoji indicator
                 if classification['classification'] == 'clarification_reply':

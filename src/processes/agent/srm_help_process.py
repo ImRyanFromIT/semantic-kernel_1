@@ -163,15 +163,9 @@ YOUR TASK: Send ONE email listing ALL missing fields and asking the user to prov
         from semantic_kernel.agents import ChatCompletionAgent
         from semantic_kernel.connectors.ai.open_ai import AzureChatPromptExecutionSettings
         from semantic_kernel.connectors.ai.function_choice_behavior import FunctionChoiceBehavior
-        from src.plugins.agent.clarification_plugin import ClarificationPlugin
 
-        # Add clarification plugin
-        clarification_plugin = ClarificationPlugin(
-            response_handler=data['response_handler'],
-            state_manager=data['state_manager'],
-            graph_client=data['graph_client']
-        )
-        kernel.add_plugin(clarification_plugin, "clarification_tools")
+        # Clarification plugin already registered at startup in run_email_agent.py
+        # Plugin name: "clarification"
 
         # Create agent
         agent = ChatCompletionAgent(
@@ -296,15 +290,10 @@ Respond with SUCCESS or FAILED when done. Otherwise indicate waiting.
 """
         )
 
-        # Create execution settings with auto function calling
-        # Need enough tokens for multiple tool calls + drafting clarification emails
-        execution_settings = AzureChatPromptExecutionSettings(
-            function_choice_behavior=FunctionChoiceBehavior.Auto(),
-            max_tokens=3000,  # Increased from 500 to allow full clarification workflow
-            temperature=0.3
-        )
+        # Use centralized clarification settings
+        from src.utils.execution_settings import CLARIFICATION_SETTINGS
 
-        return agent, execution_settings
+        return agent, CLARIFICATION_SETTINGS
 
     async def _run_clarification_agent(self, agent, execution_settings, context_info: str, email_id: str, state_manager) -> Dict[str, Any]:
         """Run agent conversation until success/failure/waiting."""

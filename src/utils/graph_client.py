@@ -248,7 +248,7 @@ class GraphClient:
             if self.test_mode:
                 # Use file-based email reading
                 emails = self.file_reader.fetch_emails(days_back, processed_email_ids)
-                print(f"[TEST MODE] Fetched {len(emails)} emails from test_emails/Inbox/ directory")
+                print(f"[TEST MODE] Fetched {len(emails)} emails from {self.file_reader.test_directory}/ directory")
                 return emails
             
             # Call async implementation directly
@@ -285,7 +285,7 @@ class GraphClient:
             if self.test_mode:
                 # Use file-based email reading
                 emails = self.file_reader.fetch_emails(days_back, processed_email_ids)
-                print(f"[TEST MODE] Fetched {len(emails)} emails from test_emails/Inbox/ directory")
+                print(f"[TEST MODE] Fetched {len(emails)} emails from {self.file_reader.test_directory}/ directory")
                 return emails
             
             # Run async operation synchronously (only safe from sync context)

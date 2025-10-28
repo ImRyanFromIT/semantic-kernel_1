@@ -6,15 +6,15 @@ import pytest
 import json
 from unittest.mock import Mock, AsyncMock, patch
 
-from ..plugins.email_plugin import EmailPlugin
-from ..plugins.state_plugin import StatePlugin
-from ..plugins.search_plugin import SearchPlugin
-from ..plugins.classification_plugin import ClassificationPlugin
-from ..plugins.extraction_plugin import ExtractionPlugin
-from ..utils.graph_client import GraphClient
-from ..utils.state_manager import StateManager
-from ..utils.error_handler import ErrorHandler
-from ..models.email_record import EmailRecord, EmailStatus
+from src.plugins.agent.email_plugin import EmailPlugin
+from src.plugins.agent.state_plugin import StatePlugin
+from src.plugins.agent.search_plugin import SearchPlugin
+from src.plugins.agent.classification_plugin import ClassificationPlugin
+from src.plugins.agent.extraction_plugin import ExtractionPlugin
+from src.utils.graph_client import GraphClient
+from src.utils.state_manager import StateManager
+from src.utils.error_handler import ErrorHandler
+from src.models.email_record import EmailRecord, EmailStatus
 
 
 class TestEmailPlugin:

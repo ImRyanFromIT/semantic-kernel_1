@@ -222,9 +222,9 @@ class EmailAgentService:
         try:
             # Get Azure Search config from environment
             import os
-            search_endpoint = os.getenv('AZURE_SEARCH_ENDPOINT', '')
-            index_name = os.getenv('AZURE_SEARCH_INDEX_NAME', 'srm-catalog')
-            api_key = os.getenv('AZURE_SEARCH_API_KEY', '')
+            search_endpoint = os.getenv('AZURE_AI_SEARCH_ENDPOINT', '')
+            index_name = os.getenv('AZURE_AI_SEARCH_INDEX_NAME', 'srm-catalog')
+            api_key = os.getenv('AZURE_AI_SEARCH_API_KEY', '')
 
             search_plugin = SearchPlugin(
                 search_endpoint=search_endpoint,

@@ -5,16 +5,16 @@ Unit tests for agent processes.
 import pytest
 from unittest.mock import Mock, AsyncMock
 
-from ..processes.email_intake_process import (
+from src.processes.agent.email_intake_process import (
     EmailIntakeProcess,
     InitializeStateStep,
     FetchNewEmailsStep,
     ClassifyEmailsStep
 )
-from ..processes.srm_help_process import (
+from src.processes.agent.srm_help_process import (
     SrmHelpProcess,
-    ExtractChangeRequestStep,
-    ValidateCompletenessStep
+    ExtractDataStep,
+    SearchSRMStep
 )
 
 
