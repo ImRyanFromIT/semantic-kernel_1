@@ -116,6 +116,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const useCaseMatch = markdown.match(/\*\*Use Case:\*\*\s+(.+)/);
         const owningTeamMatch = markdown.match(/\*\*Owning Team:\*\*\s+(.+)/);
         const urlMatch = markdown.match(/\*\*URL:\*\*\s+(.+)/);
+        const ownerNotesMatch = markdown.match(/\*\*Owner Notes:\*\*\s+(.+?)(?=\n\*\*|\n###|$)/s);
+        const hiddenNotesMatch = markdown.match(/\*\*Hidden Notes:\*\*\s+(.+?)(?=\n\*\*|\n###|$)/s);
         
         if (!nameMatch) {
             // No matching SRM found
@@ -130,6 +132,8 @@ document.addEventListener('DOMContentLoaded', () => {
             useCase: useCaseMatch ? useCaseMatch[1].trim() : '',
             owningTeam: owningTeamMatch ? owningTeamMatch[1].trim() : '',
             url: urlMatch ? urlMatch[1].trim() : '',
+            ownerNotes: ownerNotesMatch ? ownerNotesMatch[1].trim() : '',
+            hiddenNotes: hiddenNotesMatch ? hiddenNotesMatch[1].trim() : '',
             alternatives: []
         };
         
@@ -308,25 +312,53 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
         
-        // Add alternatives section
+        // Add Owner Notes
+        if (parsedResult.ownerNotes) {
+            cardContent += `
+                <div class="srm-field srm-notes-field">
+                    <span class="srm-field-label">Owner Notes:</span>
+                    <div class="srm-notes-content">${sanitize(parsedResult.ownerNotes)}</div>
+                </div>
+            `;
+        }
+        
+        // Add Hidden Notes (only show if present - these are internal)
+        if (parsedResult.hiddenNotes) {
+            cardContent += `
+                <div class="srm-field srm-notes-field">
+                    <span class="srm-field-label">Hidden Notes:</span>
+                    <div class="srm-notes-content srm-hidden-notes">${sanitize(parsedResult.hiddenNotes)}</div>
+                </div>
+            `;
+        }
+        
+        // Render up to two alternative options (if any)
         if (parsedResult.alternatives && parsedResult.alternatives.length > 0) {
-            cardContent += `<div class="srm-alternatives">
-                <h3>Alternative Options:</h3>
-                <ol class="alternatives-list">`;
-            
-            parsedResult.alternatives.forEach(alt => {
-                cardContent += `
-                    <li class="alternative-item">
-                        <strong>${sanitize(alt.name)}</strong> (${sanitize(alt.category)}) - ${sanitize(alt.useCase)}`;
+            const maxAlts = Math.min(2, parsedResult.alternatives.length);
+            let altHtml = '';
+            for (let i = 0; i < maxAlts; i++) {
+                const alt = parsedResult.alternatives[i];
+                const altCategory = alt.category ? sanitize(alt.category) : '';
+                const altUseCase = alt.useCase ? sanitize(alt.useCase) : '';
+                const altUrl = alt.url ? sanitize(alt.url) : '';
                 
-                if (alt.url) {
-                    cardContent += `<br><a href="${sanitize(alt.url)}" class="srm-url" target="_blank" rel="noopener noreferrer">${sanitize(alt.url)}</a>`;
-                }
-                
-                cardContent += `</li>`;
-            });
-            
-            cardContent += `</ol></div>`;
+                altHtml += `
+                    <li class="alt-item">
+                        <div class="alt-name">${sanitize(alt.name || '')}</div>
+                        ${altCategory ? `<div class="alt-meta"><span class="alt-label">Category:</span> ${altCategory}</div>` : ''}
+                        ${altUseCase ? `<div class="alt-meta"><span class="alt-label">Use Case:</span> ${altUseCase}</div>` : ''}
+                        ${altUrl ? `<div class="alt-meta"><span class="alt-label">URL:</span> <a href="${altUrl}" target="_blank" rel="noopener noreferrer">${altUrl}</a></div>` : ''}
+                    </li>
+                `;
+            }
+            cardContent += `
+                <div class="srm-alternatives">
+                    <h3>Alternative Options</h3>
+                    <ol class="alt-list">
+                        ${altHtml}
+                    </ol>
+                </div>
+            `;
         }
         
         // Add feedback buttons
@@ -710,6 +742,219 @@ document.addEventListener('DOMContentLoaded', () => {
         radio.addEventListener('change', (e) => {
             handleThemeChange(e.target.value);
         });
+    });
+
+    // --- SRM UPDATE CHAT ---
+    
+    const updateSrmBtn = document.getElementById('update-srm-btn');
+    const srmUpdateModal = document.getElementById('srm-update-modal');
+    const closeChatBtn = document.getElementById('close-chat-btn');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput = document.getElementById('chat-input');
+    const sendChatBtn = document.getElementById('send-chat-btn');
+    const chatStatus = document.getElementById('chat-status');
+    
+    let currentChatSessionId = null;
+    let isWaitingForResponse = false;
+    
+    const openSrmUpdateChat = () => {
+        srmUpdateModal.classList.add('show');
+        srmUpdateModal.setAttribute('aria-hidden', 'false');
+        chatInput.focus();
+        
+        // Reset chat for new session
+        if (!currentChatSessionId) {
+            chatMessages.innerHTML = `
+                <div class="chat-message agent-message">
+                    <div class="message-content">
+                        <p><strong>Hi there! 👋</strong></p>
+                        <p>I can help you update or modify SRM documents.</p>
+                        <p><strong>Here's how it works:</strong></p>
+                        <ol style="margin: 0.5rem 0 0.5rem 1.5rem; padding: 0;">
+                            <li>Tell me which SRM you want to update</li>
+                            <li>Describe what needs to change (owner notes or hidden notes)</li>
+                            <li>Explain briefly why the change is needed</li>
+                        </ol>
+                        <p>Would you like to start by telling me which SRM you want to update?</p>
+                    </div>
+                </div>
+            `;
+            chatStatus.textContent = '';
+            chatStatus.className = 'chat-status';
+        }
+    };
+    
+    const closeSrmUpdateChat = () => {
+        srmUpdateModal.classList.remove('show');
+        srmUpdateModal.setAttribute('aria-hidden', 'true');
+        
+        // Reset session if completed or escalated
+        const statusClass = chatStatus.className;
+        if (statusClass.includes('success') || statusClass.includes('warning')) {
+            currentChatSessionId = null;
+            chatInput.value = '';
+        }
+    };
+    
+    const formatAgentMessage = (content) => {
+        // Basic markdown-style formatting for agent messages
+        let formatted = sanitize(content);
+        
+        // Convert **bold** to <strong>
+        formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        
+        // Convert *italic* to <em>
+        formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        
+        // Convert line breaks to paragraphs
+        const paragraphs = formatted.split('\n\n').filter(p => p.trim());
+        if (paragraphs.length > 1) {
+            formatted = paragraphs.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+        } else {
+            formatted = `<p>${formatted.replace(/\n/g, '<br>')}</p>`;
+        }
+        
+        return formatted;
+    };
+    
+    const addMessageToChat = (content, isUser = false) => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${isUser ? 'user-message' : 'agent-message'}`;
+        
+        const formattedContent = isUser ? `<p>${sanitize(content)}</p>` : formatAgentMessage(content);
+        
+        messageDiv.innerHTML = `
+            <div class="message-content">
+                ${formattedContent}
+            </div>
+        `;
+        chatMessages.appendChild(messageDiv);
+        
+        // Scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    };
+    
+    const showTypingIndicator = () => {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'chat-message agent-message';
+        typingDiv.id = 'typing-indicator';
+        typingDiv.innerHTML = `
+            <div class="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        `;
+        chatMessages.appendChild(typingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    };
+    
+    const hideTypingIndicator = () => {
+        const typingIndicator = document.getElementById('typing-indicator');
+        if (typingIndicator) {
+            typingIndicator.remove();
+        }
+    };
+    
+    const updateChatStatus = (message, type = '') => {
+        chatStatus.textContent = message;
+        chatStatus.className = `chat-status ${type}`;
+    };
+    
+    const sendChatMessage = async () => {
+        const message = chatInput.value.trim();
+        if (!message || isWaitingForResponse) return;
+        
+        // Add user message to chat
+        addMessageToChat(message, true);
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+        
+        // Disable input while waiting
+        isWaitingForResponse = true;
+        sendChatBtn.disabled = true;
+        chatInput.disabled = true;
+        
+        // Show typing indicator
+        showTypingIndicator();
+        
+        try {
+            const response = await fetch('/api/srm-update-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: currentChatSessionId,
+                    message: message
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // Update session ID
+            currentChatSessionId = data.session_id;
+            
+            // Hide typing indicator
+            hideTypingIndicator();
+            
+            // Add agent response
+            addMessageToChat(data.response, false);
+            
+            // Update status based on response status
+            if (data.status === 'completed') {
+                updateChatStatus('✓ Update completed successfully!', 'success');
+                setTimeout(() => {
+                    closeSrmUpdateChat();
+                }, 3000);
+            } else if (data.status === 'escalated') {
+                updateChatStatus('⚠ This request has been escalated to the support team.', 'warning');
+            } else {
+                updateChatStatus('');
+            }
+            
+        } catch (error) {
+            console.error('Chat error:', error);
+            hideTypingIndicator();
+            addMessageToChat('Sorry, I encountered an error. Please try again.', false);
+            updateChatStatus('Error: Unable to process message', 'error');
+        } finally {
+            // Re-enable input
+            isWaitingForResponse = false;
+            sendChatBtn.disabled = false;
+            chatInput.disabled = false;
+            chatInput.focus();
+        }
+    };
+    
+    // Event Listeners for Chat
+    updateSrmBtn.addEventListener('click', openSrmUpdateChat);
+    closeChatBtn.addEventListener('click', closeSrmUpdateChat);
+    
+    // Close modal when clicking outside
+    srmUpdateModal.addEventListener('click', (e) => {
+        if (e.target === srmUpdateModal) {
+            closeSrmUpdateChat();
+        }
+    });
+    
+    // Send message on button click
+    sendChatBtn.addEventListener('click', sendChatMessage);
+    
+    // Send message on Enter key (Shift+Enter for new line)
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendChatMessage();
+        }
+    });
+    
+    // Auto-resize textarea
+    chatInput.addEventListener('input', () => {
+        chatInput.style.height = 'auto';
+        chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
     });
 
     // --- INITIALIZATION ---

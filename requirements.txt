@@ -7,3 +7,9 @@ azure-search-documents
 fastapi
 uvicorn
 msgraph-sdk
+pytest
+pytest-asyncio
+pytest-mock
+pytest-cov
+pytest-timeout
+freezegun

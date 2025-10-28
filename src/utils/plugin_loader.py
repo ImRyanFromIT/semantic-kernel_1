@@ -54,12 +54,30 @@ def load_prompt_plugin(
     # Use function name or default to plugin name
     func_name = function_name or plugin_name
     
+    # Convert execution_settings from config format to PromptExecutionSettings objects
+    from semantic_kernel.connectors.ai.open_ai import AzureChatPromptExecutionSettings
+
+    execution_settings_dict = {}
+    config_exec_settings = config_data.get('execution_settings', {})
+
+    if config_exec_settings:
+        for service_id, settings in config_exec_settings.items():
+            # Convert dict to AzureChatPromptExecutionSettings
+            execution_settings_dict[service_id] = AzureChatPromptExecutionSettings(
+                service_id=service_id,
+                max_tokens=settings.get('max_tokens', 1000),
+                temperature=settings.get('temperature', 0.7),
+                top_p=settings.get('top_p', 1.0),
+                presence_penalty=settings.get('presence_penalty', 0.0),
+                frequency_penalty=settings.get('frequency_penalty', 0.0),
+            )
+
     # Create prompt template config
     template_config = PromptTemplateConfig(
         name=func_name,
         description=config_data.get('description', ''),
         template=prompt_template,
-        execution_settings=config_data.get('execution_settings', {}),
+        execution_settings=execution_settings_dict,
     )
     
     # Create and register the function
@@ -83,9 +101,9 @@ def load_prompt_plugin(
 
 def load_all_plugins(kernel: Kernel, base_path: Optional[str] = None) -> None:
     '''
-    Load all plugins from the src/plugins directory.
-    
-    This function loads all standard plugins used by the system:
+    Load all plugins from the src/plugins/discovery directory.
+
+    This function loads all standard plugins used by the discovery system:
     - content_validation (input guardrails for SRM queries)
     - hostname_validation (input validation for hostname lookups)
     - intent_detection
@@ -93,16 +111,16 @@ def load_all_plugins(kernel: Kernel, base_path: Optional[str] = None) -> None:
     - query_classification (clarity)
     - response_generation (clarification_question)
     - semantic_reranking (LLM-based candidate reranking)
-    
+
     Args:
         kernel: Semantic Kernel instance to register plugins with
-        base_path: Optional base path for plugins (defaults to src/plugins)
+        base_path: Optional base path for plugins (defaults to src/plugins/discovery)
     '''
     # Determine base path
     if base_path is None:
         # Assume we're running from project root
         current_dir = Path(__file__).parent.parent.parent
-        base_path = current_dir / 'src' / 'plugins'
+        base_path = current_dir / 'src' / 'plugins' / 'discovery'
     else:
         base_path = Path(base_path)
     
@@ -144,6 +162,8 @@ def load_all_plugins(kernel: Kernel, base_path: Optional[str] = None) -> None:
             loaded_count += 1
         except Exception as e:
             print(f"[!] Failed to load plugin {plugin_name}: {e}")
+            import traceback
+            traceback.print_exc()
     
     print(f"[+] Successfully loaded {loaded_count}/{len(plugins_to_load)} plugins")
 

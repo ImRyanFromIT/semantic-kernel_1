@@ -126,9 +126,12 @@ class AzureAISearchStore(VectorStoreBase):
             filter_str = " and ".join(filter_parts)
         
         # Perform text-only BM25 search
+        # Include owner_notes and hidden_notes fields (lowercase with underscores in your index)
+        select_fields = ["id", "SRM_ID", "Name", "Description", "URL_Link", "Team", "Type", "owner_notes", "hidden_notes"]
+        
         results = self.search_client.search(
             search_text=query,  # Keyword/full-text search (BM25)
-            select=["id", "SRM_ID", "Name", "Description", "URL_Link", "Team", "Type"],
+            select=select_fields,
             top=top_k,
             filter=filter_str,
             query_type="full"  # Use full Lucene query syntax for keyword matching
@@ -139,6 +142,7 @@ class AzureAISearchStore(VectorStoreBase):
             for result in results:
                 # Map Azure AI Search field names to internal format
                 # Index fields: id, SRM_ID, Name, Description, URL_Link, Team, Type
+                # Optional fields: Owner_Notes, Hidden_Notes (may not exist in all indexes)
                 # Description → the actual service description text
                 # Name → service name
                 # Team → owning team
@@ -150,6 +154,9 @@ class AzureAISearchStore(VectorStoreBase):
                 team = result.get('Team', '')
                 record_type = result.get('Type', 'Services')
                 url_link = result.get('URL_Link', '')
+                # Optional notes fields - may not exist in index
+                owner_notes = result.get('Owner_Notes', '') or result.get('owner_notes', '')
+                hidden_notes = result.get('Hidden_Notes', '') or result.get('hidden_notes', '')
                 
                 # Create a simple object to hold the result data
                 record = type('Record', (), {
@@ -164,6 +171,8 @@ class AzureAISearchStore(VectorStoreBase):
                     'team': team,
                     'technologies': '',  # Not available in this index
                     'url': url_link,
+                    'owner_notes': owner_notes,
+                    'hidden_notes': hidden_notes,
                 })()
                 
                 score = result.get('@search.score', 0.0)
@@ -193,6 +202,9 @@ class AzureAISearchStore(VectorStoreBase):
                 team = result.get('Team', '')
                 record_type = result.get('Type', 'Services')
                 url_link = result.get('URL_Link', '')
+                # Optional notes fields - may not exist in index
+                owner_notes = result.get('Owner_Notes', '') or result.get('owner_notes', '')
+                hidden_notes = result.get('Hidden_Notes', '') or result.get('hidden_notes', '')
                 
                 record = type('Record', (), {
                     'id': record_id,
@@ -206,6 +218,8 @@ class AzureAISearchStore(VectorStoreBase):
                     'team': team,
                     'technologies': '',  # Not available in this index
                     'url': url_link,
+                    'owner_notes': owner_notes,
+                    'hidden_notes': hidden_notes,
                 })()
                 return record
             

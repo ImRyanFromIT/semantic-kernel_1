@@ -19,18 +19,23 @@
                 <p class="tagline">SRM Discovery & Hostname Lookup</p>
             </div>
         </div>
-        <div class="theme-switcher">
-            <fieldset>
-                <legend class="visually-hidden">Theme Selector</legend>
-                <input type="radio" id="theme-system" name="theme" value="system" checked>
-                <label for="theme-system">System</label>
-                
-                <input type="radio" id="theme-light" name="theme" value="light">
-                <label for="theme-light">Light</label>
-                
-                <input type="radio" id="theme-dark" name="theme" value="dark">
-                <label for="theme-dark">Dark</label>
-            </fieldset>
+        <div class="header-actions">
+            <button id="update-srm-btn" class="update-srm-btn" title="Update SRM information">
+                <span class="btn-icon">✏️</span> Update SRM
+            </button>
+            <div class="theme-switcher">
+                <fieldset>
+                    <legend class="visually-hidden">Theme Selector</legend>
+                    <input type="radio" id="theme-system" name="theme" value="system" checked>
+                    <label for="theme-system">System</label>
+                    
+                    <input type="radio" id="theme-light" name="theme" value="light">
+                    <label for="theme-light">Light</label>
+                    
+                    <input type="radio" id="theme-dark" name="theme" value="dark">
+                    <label for="theme-dark">Dark</label>
+                </fieldset>
+            </div>
         </div>
     </header>
 
@@ -65,6 +70,38 @@
 
         <div id="sr-announcer" class="visually-hidden" role="alert" aria-live="assertive"></div>
     </main>
+
+    <!-- SRM Update Chat Modal -->
+    <div id="srm-update-modal" class="srm-update-modal" role="dialog" aria-labelledby="chat-title" aria-hidden="true">
+        <div class="srm-update-modal-content">
+            <div class="chat-header">
+                <h2 id="chat-title">Update SRM</h2>
+                <button id="close-chat-btn" class="close-chat-btn" aria-label="Close chat">&times;</button>
+            </div>
+            <div id="chat-messages" class="chat-messages" role="log" aria-live="polite" aria-atomic="false">
+                <div class="chat-message agent-message">
+                    <div class="message-content">
+                        <p><strong>Hi there! 👋</strong></p>
+                        <p>I can help you update or modify SRM documents.</p>
+                        <p><strong>Here's how it works:</strong></p>
+                        <ol style="margin: 0.5rem 0 0.5rem 1.5rem; padding: 0;">
+                            <li>Tell me which SRM you want to update</li>
+                            <li>Describe what needs to change (owner notes or hidden notes)</li>
+                            <li>Explain briefly why the change is needed</li>
+                        </ol>
+                        <p>Would you like to start by telling me which SRM you want to update?</p>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <textarea id="chat-input" class="chat-input" placeholder="Type your message..." rows="2" aria-label="Chat message input"></textarea>
+                <button id="send-chat-btn" class="send-chat-btn" aria-label="Send message">
+                    <span class="send-icon">➤</span>
+                </button>
+            </div>
+            <div id="chat-status" class="chat-status"></div>
+        </div>
+    </div>
 
     <script defer src="/static/script.js"></script>
 </body>
