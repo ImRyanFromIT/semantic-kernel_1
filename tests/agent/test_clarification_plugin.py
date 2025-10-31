@@ -1,13 +1,19 @@
 """
-Tests for ClarificationPlugin - Multi-turn clarification conversations.
+Clarification Plugin Tests
 
-Test Coverage:
-1. Sending clarification emails
-2. Checking for user replies
-3. Merging replies with original context
-4. Detecting human escalation requests
-5. Recording unsatisfactory replies
-6. Tracking clarification attempts
+Purpose: Test multi-turn clarification conversations for incomplete
+         change requests.
+
+Type: Unit
+Test Count: 13
+
+Key Test Areas:
+- Sending clarification emails
+- Checking for user replies
+- Merging replies with original context
+- Human escalation keyword detection
+- Unsatisfactory reply handling
+- Clarification attempt tracking (2-attempt limit)
 """
 
 import pytest

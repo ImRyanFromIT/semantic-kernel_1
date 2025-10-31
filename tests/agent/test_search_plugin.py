@@ -1,8 +1,23 @@
 """
-Tests for SearchPlugin.
+Search Plugin Tests
 
-This module tests the Azure AI Search plugin which handles SRM document
-search, retrieval, and updates.
+Purpose: Test Azure AI Search plugin for SRM document search,
+         retrieval, and updates.
+
+Type: Unit
+Test Count: 14
+
+Key Test Areas:
+- SRM document search with filters
+- Top-k result limiting
+- Document retrieval by ID
+- Document updates with before/after capture
+- Mock vs live mode handling
+- Error handling
+
+Dependencies:
+- search_plugin fixture
+- mock_search_client fixture
 """
 
 import pytest

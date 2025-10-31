@@ -1,5 +1,27 @@
 """
-Unit tests for agent utilities.
+Agent Utilities Tests
+
+Purpose: Test utility classes including GraphClient, StateManager,
+         TokenCounter, and other helper functions.
+
+Type: Unit
+Test Count: 25
+
+Key Test Areas:
+- GraphClient email operations
+- StateManager file operations
+- TokenCounter token estimation
+- Email validation
+- Kernel builder
+- Plugin loader
+
+Dependencies:
+- Mock Graph API responses
+- Temporary file system
+- Environment variables
+
+Note: Some tests require live Graph API credentials (4 tests may fail
+      without credentials).
 """
 
 import pytest
@@ -7,7 +29,7 @@ import json
 import tempfile
 import os
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 
 from src.utils.state_manager import StateManager
 from src.utils.error_handler import ErrorHandler, ErrorType
@@ -128,8 +150,9 @@ class TestStateManager:
             received_datetime="2024-01-01T00:00:00Z"
         )
         
-        # Manually set old timestamp
-        old_timestamp = (datetime.utcnow() - timedelta(hours=50)).isoformat()
+        # Manually set old timestamp - use timezone-aware datetime
+        from datetime import timezone
+        old_timestamp = (datetime.now(timezone.utc) - timedelta(hours=50)).isoformat()
         old_record.timestamp = old_timestamp
         
         state_manager.append_record(old_record)
@@ -276,11 +299,14 @@ class TestGraphClient:
     
     def test_authenticate_success(self, graph_client):
         """Test successful authentication."""
-        success = graph_client.authenticate()
-        
-        # Should succeed with mock implementation
-        assert success is True
-        assert graph_client._authenticated is True
+        # Mock the credential and client creation to avoid real Azure AD calls
+        with patch('src.utils.graph_client.ClientSecretCredential') as mock_cred:
+            with patch('src.utils.graph_client.GraphServiceClient') as mock_graph:
+                success = graph_client.authenticate()
+
+                # Should succeed with mock implementation
+                assert success is True
+                assert graph_client._authenticated is True
     
     def test_authenticate_missing_params(self):
         """Test authentication with missing parameters."""
@@ -294,47 +320,71 @@ class TestGraphClient:
         with pytest.raises(Exception, match="Not authenticated"):
             graph_client.fetch_emails()
     
-    def test_fetch_emails_authenticated(self, graph_client):
+    @pytest.mark.asyncio
+    async def test_fetch_emails_authenticated(self, graph_client):
         """Test fetching emails when authenticated."""
-        graph_client.authenticate()
-        
-        emails = graph_client.fetch_emails(days_back=7)
-        
-        # Should return mock emails
-        assert isinstance(emails, list)
+        # Mock authentication without real Azure AD calls
+        with patch('src.utils.graph_client.ClientSecretCredential'):
+            with patch('src.utils.graph_client.GraphServiceClient'):
+                graph_client.authenticate()
+
+        # Mock the async fetch method to avoid real Graph API calls
+        with patch.object(graph_client, '_fetch_emails_async', new=AsyncMock(return_value=[])):
+            emails = await graph_client.fetch_emails_async(days_back=7)
+
+            # Should return mock emails (empty list in this case)
+            assert isinstance(emails, list)
     
     def test_send_email_not_authenticated(self, graph_client):
         """Test sending email without authentication."""
         with pytest.raises(Exception, match="Not authenticated"):
             graph_client.send_email("test@example.com", "Subject", "Body")
     
-    def test_send_email_authenticated(self, graph_client):
+    @pytest.mark.asyncio
+    async def test_send_email_authenticated(self, graph_client):
         """Test sending email when authenticated."""
-        graph_client.authenticate()
-        
-        success = graph_client.send_email("test@example.com", "Subject", "Body")
-        
-        # Should succeed with mock implementation
-        assert success is True
+        # Mock authentication without real Azure AD calls
+        with patch('src.utils.graph_client.ClientSecretCredential'):
+            with patch('src.utils.graph_client.GraphServiceClient'):
+                graph_client.authenticate()
+
+        # Mock the async send method to avoid real Graph API calls
+        with patch.object(graph_client, '_send_email_async', new=AsyncMock(return_value=True)):
+            success = await graph_client.send_email_async("test@example.com", "Subject", "Body")
+
+            # Should succeed with mock implementation
+            assert success is True
     
-    def test_reply_to_email_authenticated(self, graph_client):
+    @pytest.mark.asyncio
+    async def test_reply_to_email_authenticated(self, graph_client):
         """Test replying to email when authenticated."""
-        graph_client.authenticate()
-        
-        success = graph_client.reply_to_email("email_123", "Reply body")
-        
-        # Should succeed with mock implementation
-        assert success is True
+        # Mock authentication without real Azure AD calls
+        with patch('src.utils.graph_client.ClientSecretCredential'):
+            with patch('src.utils.graph_client.GraphServiceClient'):
+                graph_client.authenticate()
+
+        # Mock the async reply method to avoid real Graph API calls
+        with patch.object(graph_client, '_reply_to_email_async', new=AsyncMock(return_value=True)):
+            success = await graph_client.reply_to_email_async("email_123", "Reply body")
+
+            # Should succeed with mock implementation
+            assert success is True
     
-    def test_forward_email_authenticated(self, graph_client):
+    @pytest.mark.asyncio
+    async def test_forward_email_authenticated(self, graph_client):
         """Test forwarding email when authenticated."""
-        graph_client.authenticate()
-        
-        success = graph_client.forward_email(
-            "email_123", 
-            ["support@example.com"], 
-            "Forwarding comment"
-        )
-        
-        # Should succeed with mock implementation
-        assert success is True
+        # Mock authentication without real Azure AD calls
+        with patch('src.utils.graph_client.ClientSecretCredential'):
+            with patch('src.utils.graph_client.GraphServiceClient'):
+                graph_client.authenticate()
+
+        # Mock the async forward method to avoid real Graph API calls
+        with patch.object(graph_client, '_forward_email_async', new=AsyncMock(return_value=True)):
+            success = await graph_client.forward_email_async(
+                "email_123",
+                ["support@example.com"],
+                "Forwarding comment"
+            )
+
+            # Should succeed with mock implementation
+            assert success is True

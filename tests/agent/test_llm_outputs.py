@@ -1,8 +1,21 @@
 """
-Tests for LLM output Pydantic models.
+LLM Output Models Tests
 
-This module tests the Pydantic models used for structured LLM outputs,
-including validation rules and field constraints.
+Purpose: Test Pydantic models used for structured LLM outputs,
+         including validation rules and field constraints.
+
+Type: Unit
+Test Count: 7
+
+Key Test Areas:
+- ChangeRequest model validation
+- Classification model validation
+- Field validation and constraints
+- Required vs optional fields
+- Pydantic error handling
+
+Dependencies:
+- Pydantic ValidationError handling
 """
 
 import pytest

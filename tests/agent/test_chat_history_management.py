@@ -1,8 +1,22 @@
 """
-Tests for chat history management.
+Chat History Management Tests
 
-Verifies token counting, sliding window reduction, persistence, and
-summarization functionality.
+Purpose: Test chat history management including token counting,
+         sliding window reduction, and persistence.
+
+Type: Integration
+Test Count: 16
+
+Key Test Areas:
+- Token counting and estimation
+- Sliding window reduction
+- History persistence
+- Summarization functionality
+- Message tracking
+
+Dependencies:
+- Chat history fixtures
+- Token counter fixtures
 """
 
 import pytest
