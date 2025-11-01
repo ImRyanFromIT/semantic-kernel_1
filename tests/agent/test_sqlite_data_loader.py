@@ -105,6 +105,7 @@ class TestSQLiteDataLoader:
         """Test that CSV fields are correctly mapped to SRMIndexRecord."""
         # Arrange
         mock_store = Mock()
+        mock_store.ensure_collection_exists = AsyncMock()
         mock_store.upsert = AsyncMock()
         data_loader.vector_store = mock_store
 
@@ -186,6 +187,20 @@ class TestSQLiteDataLoader:
         # Act & Assert - let Python's csv module raise its exception
         with pytest.raises(Exception):  # csv.Error or similar
             await data_loader.load_and_index(str(csv_path))
+
+    @pytest.mark.asyncio
+    async def test_missing_required_columns(self, data_loader, tmp_path):
+        """Test that CSV with missing required columns raises ValueError."""
+        csv_path = tmp_path / "incomplete.csv"
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=['SRM_ID', 'Name'])  # Missing columns
+            writer.writeheader()
+            writer.writerow({'SRM_ID': 'SRM-001', 'Name': 'Test'})
+
+        with pytest.raises(ValueError) as exc_info:
+            await data_loader.load_and_index(str(csv_path))
+
+        assert "missing required columns" in str(exc_info.value).lower()
 
 
 class TestSRMIndexRecord:
