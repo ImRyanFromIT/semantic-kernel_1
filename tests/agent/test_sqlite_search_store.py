@@ -58,5 +58,112 @@ class TestSQLiteSearchStoreInitialization:
         assert result[0] == 'srm_fts'
 
 
+class TestSQLiteSearchStoreSearch:
+    """Test search operations with BM25 ranking."""
+
+    @pytest.mark.asyncio
+    async def test_search_successful_with_results(self):
+        """Test successful search returning multiple results."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Create test records
+        records = []
+        for i in range(3):
+            record = type('Record', (), {})()
+            record.id = f'test-{i:03d}'
+            record.SRM_ID = f'SRM-{i+51:03d}'
+            record.Name = f'Storage Request {i}'
+            record.Description = 'Expand storage capacity for data retention'
+            record.URL_Link = f'https://example.com/srm-{i}'
+            record.Team = 'Storage Team'
+            record.Type = 'Storage'
+            record.TechnologiesTeamWorksWith = 'Azure, AWS'
+            record.owner_notes = 'Configuration steps'
+            record.hidden_notes = 'Internal notes'
+            records.append(record)
+
+        # Upsert records
+        await store.upsert(records)
+
+        # Search for "storage"
+        result_iterator = await store.search(query="storage", top_k=5)
+
+        # Collect results
+        results = []
+        async for result in result_iterator:
+            results.append(result)
+
+        # Verify results
+        assert len(results) == 3
+        assert all(hasattr(r, 'score') for r in results)
+        assert all(hasattr(r, 'record') for r in results)
+        assert results[0].record.name == 'Storage Request 0'
+
+    @pytest.mark.asyncio
+    async def test_search_with_filters(self):
+        """Test search with filter expressions."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Create test records with different teams
+        records = []
+        for i, team in enumerate(['Storage Team', 'Network Team', 'Storage Team']):
+            record = type('Record', (), {})()
+            record.id = f'test-{i:03d}'
+            record.SRM_ID = f'SRM-{i+51:03d}'
+            record.Name = f'Request {i}'
+            record.Description = 'Test description'
+            record.Team = team
+            record.Type = 'Infrastructure'
+            records.append(record)
+
+        await store.upsert(records)
+
+        # Search with filter
+        result_iterator = await store.search(
+            query="request",
+            top_k=10,
+            filters={"Team": "Storage Team"}
+        )
+
+        results = [r async for r in result_iterator]
+
+        # Should only return Storage Team results
+        assert len(results) == 2
+        assert all(r.record.team == 'Storage Team' for r in results)
+
+    @pytest.mark.asyncio
+    async def test_search_empty_results(self):
+        """Test search returning no results."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        result_iterator = await store.search(query="nonexistent", top_k=5)
+        results = [r async for r in result_iterator]
+
+        assert len(results) == 0
+
+    @pytest.mark.asyncio
+    async def test_search_respects_top_k(self):
+        """Test that search respects top_k limit."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Create 10 records
+        records = []
+        for i in range(10):
+            record = type('Record', (), {})()
+            record.id = f'test-{i:03d}'
+            record.SRM_ID = f'SRM-{i:03d}'
+            record.Name = f'Storage Request {i}'
+            record.Description = 'Storage expansion'
+            records.append(record)
+
+        await store.upsert(records)
+
+        # Search with top_k=3
+        result_iterator = await store.search(query="storage", top_k=3)
+        results = [r async for r in result_iterator]
+
+        assert len(results) == 3
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
