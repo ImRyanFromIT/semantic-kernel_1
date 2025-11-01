@@ -5,7 +5,7 @@ JSONL state file management for the SRM Archivist Agent.
 import json
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 
@@ -147,7 +147,7 @@ class StateManager:
                         setattr(record, field, value)
                 
                 # Update timestamp
-                record.timestamp = datetime.utcnow().isoformat()
+                record.timestamp = datetime.now(timezone.utc).isoformat()
                 updated = True
                 break
         
@@ -240,7 +240,7 @@ class StateManager:
         Returns:
             Path to the backed up corrupted file
         """
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         corrupted_file = Path(f"{self.state_file}.corrupted_{timestamp}")
         
         if self.state_file.exists():

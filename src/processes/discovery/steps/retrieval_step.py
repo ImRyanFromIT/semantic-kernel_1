@@ -62,9 +62,9 @@ class RetrievalStep(KernelProcessStep):
         # Perform vector search using vector_store from input_data
         top_k = 5  # Get top 5 candidates for reranking
         try:
-            logger.debug("Calling vector store search", extra={"session_id": session_id, "top_k": top_k})
+            logger.info(f"Calling vector store search: query='{search_query}', top_k={top_k}", extra={"session_id": session_id})
             results = await vector_store.search(search_query, top_k=top_k)
-            logger.debug("Search completed", extra={"session_id": session_id})
+            logger.info(f"Search returned, type: {type(results)}", extra={"session_id": session_id})
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
@@ -79,7 +79,10 @@ class RetrievalStep(KernelProcessStep):
         
         # Collect results
         candidates = []
+        result_count = 0
         async for result in results:
+            result_count += 1
+            logger.debug(f"Processing result {result_count}, score: {result.score}", extra={"session_id": session_id})
             record = result.record
             
             # Handle team-based results from Azure AI Search

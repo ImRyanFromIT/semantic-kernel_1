@@ -3,7 +3,7 @@ Email record model for tracking email processing state.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Dict, Any
 from uuid import uuid4
@@ -50,7 +50,7 @@ class EmailRecord:
     
     # Processing state
     status: EmailStatus = EmailStatus.CLASSIFIED
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     
     # Extracted data (for SRM help requests)
     extracted_data: Optional[Dict[str, Any]] = None
@@ -121,7 +121,7 @@ class EmailRecord:
             confidence=data.get('confidence'),
             reason=data.get('reason'),
             status=status,
-            timestamp=data.get('timestamp', datetime.utcnow().isoformat()),
+            timestamp=data.get('timestamp', datetime.now(timezone.utc).isoformat()),
             extracted_data=data.get('extracted_data'),
             update_payload=data.get('update_payload'),
             update_result=data.get('update_result'),
@@ -141,7 +141,8 @@ class EmailRecord:
         """Check if email has been stale for more than specified hours."""
         try:
             last_update = datetime.fromisoformat(self.timestamp.replace('Z', '+00:00'))
-            now = datetime.utcnow()
+            # Use timezone-aware UTC datetime to match last_update
+            now = datetime.now(timezone.utc)
             return (now - last_update).total_seconds() > (hours * 3600)
         except (ValueError, AttributeError):
             return True  # Assume stale if timestamp is invalid
@@ -149,7 +150,7 @@ class EmailRecord:
     def update_status(self, new_status: EmailStatus, error: Optional[str] = None) -> None:
         """Update status and timestamp."""
         self.status = new_status
-        self.timestamp = datetime.utcnow().isoformat()
+        self.timestamp = datetime.now(timezone.utc).isoformat()
         self.processing_attempts += 1
         if error:
             self.last_error = error

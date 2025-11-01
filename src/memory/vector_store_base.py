@@ -32,15 +32,16 @@ class VectorStoreBase(ABC):
         pass
     
     @abstractmethod
-    async def search(self, query: str, top_k: int = 8, filters: dict | None = None) -> AsyncIterator[Any]:
+    async def search(self, query: str, top_k: int = 8, filters: dict | None = None, **kwargs) -> AsyncIterator[Any]:
         '''
         Search for similar records using vector similarity.
-        
+
         Args:
             query: The search query text
             top_k: Number of top results to return
             filters: Optional filters to apply (e.g., {'team': 'Data Storage'})
-            
+            **kwargs: Additional search parameters (e.g., fuzzy_threshold, rrf_k)
+
         Returns:
             AsyncIterator of search results with scores
         '''

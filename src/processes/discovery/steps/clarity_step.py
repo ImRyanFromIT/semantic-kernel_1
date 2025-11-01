@@ -212,7 +212,7 @@ class ClarityStep(KernelProcessStep[ClarityStepState]):
             return result
         except Exception as e:
             logger.warning("Entity extraction failed, using default", extra={"error": str(e)})
-            return "none"
+            return ""  # Return empty string so split() returns empty list
     
     async def _assess_clarity(self, user_query: str, extracted_entities: str, kernel: Kernel) -> bool:
         '''
