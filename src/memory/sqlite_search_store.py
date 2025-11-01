@@ -38,7 +38,16 @@ class SQLiteSearchStore(VectorStoreBase):
         - Searchable fields: Name, Description, owner_notes, hidden_notes, TechnologiesTeamWorksWith
         - Filterable fields: SRM_ID, Team, Type, id, URL_Link
         - Feedback fields: negative_feedback_queries, positive_feedback_queries, feedback_score_adjustment
+
+    WARNING: Thread Safety
+        This store uses check_same_thread=False for SQLite connections.
+        It is NOT thread-safe and must only be accessed from a single thread.
+        Do not share instances across multiple threads or async tasks that
+        run in different threads.
     """
+
+    # Whitelist of allowed filter fields to prevent SQL injection
+    ALLOWED_FILTER_FIELDS = {'SRM_ID', 'Team', 'Type', 'id', 'URL_Link'}
 
     def __init__(self, db_path: str = ":memory:"):
         """
@@ -191,6 +200,8 @@ class SQLiteSearchStore(VectorStoreBase):
         # Add filter clauses
         if filters:
             for key, value in filters.items():
+                if key not in self.ALLOWED_FILTER_FIELDS:
+                    raise ValueError(f"Invalid filter field: {key}. Allowed fields: {self.ALLOWED_FILTER_FIELDS}")
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
 
@@ -222,6 +233,10 @@ class SQLiteSearchStore(VectorStoreBase):
                 positive_feedback = json.loads(row['positive_feedback_queries']) if row['positive_feedback_queries'] else []
 
                 # Create record object
+                # Note: Multiple field names for backward compatibility with Azure store
+                # - content/use_case both map to Description (different consumers expect different names)
+                # - category/kind both map to Type (legacy naming)
+                # - owning_team/team both map to Team (API compatibility)
                 record = type('Record', (), {
                     'id': row['id'],
                     'srm_id': row['SRM_ID'],
@@ -280,6 +295,10 @@ class SQLiteSearchStore(VectorStoreBase):
         positive_feedback = json.loads(row['positive_feedback_queries']) if row['positive_feedback_queries'] else []
 
         # Create record object
+        # Note: Multiple field names for backward compatibility with Azure store
+        # - content/use_case both map to Description (different consumers expect different names)
+        # - category/kind both map to Type (legacy naming)
+        # - owning_team/team both map to Team (API compatibility)
         record = type('Record', (), {
             'id': row['id'],
             'srm_id': row['SRM_ID'],
