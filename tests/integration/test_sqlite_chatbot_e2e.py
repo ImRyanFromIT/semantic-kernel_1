@@ -1,6 +1,25 @@
-'''
-End-to-end integration test for SQLite chatbot with auto-loaded data.
-'''
+"""
+End-to-End SQLite Chatbot Integration Tests
+
+Purpose: Test complete SQLite chatbot startup flow from kernel creation
+         through data loading and query execution.
+
+Type: Integration (E2E)
+Test Count: 2
+
+Key Test Areas:
+1. Complete startup sequence (kernel → store → load → query)
+2. Data searchability verification
+3. Record structure validation
+4. Error handling for missing CSV files
+
+Dependencies:
+- pytest-asyncio for async test support
+- Real data file: data/srm_index.csv (55 records)
+- src.utils.kernel_builder.create_kernel
+- src.utils.store_factory.create_vector_store
+- src.data.sqlite_data_loader.SQLiteDataLoader
+"""
 
 import pytest
 import os
