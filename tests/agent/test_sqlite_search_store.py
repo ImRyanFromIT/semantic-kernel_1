@@ -165,5 +165,128 @@ class TestSQLiteSearchStoreSearch:
         assert len(results) == 3
 
 
+class TestSQLiteSearchStoreUpsert:
+    """Test upsert operations."""
+
+    @pytest.mark.asyncio
+    async def test_upsert_single_record(self):
+        """Test upserting a single record."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Create test record
+        record = type('Record', (), {})()
+        record.id = 'test-001'
+        record.SRM_ID = 'SRM-051'
+        record.Name = 'Test SRM'
+        record.Description = 'Test description'
+        record.owner_notes = 'Test notes'
+        record.Team = 'Test Team'
+        record.Type = 'Test'
+
+        await store.upsert([record])
+
+        # Verify record was inserted
+        retrieved = await store.get_by_id('test-001')
+        assert retrieved is not None
+        assert retrieved.srm_id == 'SRM-051'
+        assert retrieved.name == 'Test SRM'
+
+    @pytest.mark.asyncio
+    async def test_upsert_batch_records(self):
+        """Test upserting multiple records in batch."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Create multiple records
+        records = []
+        for i in range(5):
+            record = type('Record', (), {})()
+            record.id = f'test-{i:03d}'
+            record.SRM_ID = f'SRM-{i:03d}'
+            record.Name = f'Test SRM {i}'
+            record.Description = f'Description {i}'
+            records.append(record)
+
+        await store.upsert(records)
+
+        # Verify all records were inserted
+        for i in range(5):
+            retrieved = await store.get_by_id(f'test-{i:03d}')
+            assert retrieved is not None
+            assert retrieved.name == f'Test SRM {i}'
+
+    @pytest.mark.asyncio
+    async def test_upsert_updates_existing_record(self):
+        """Test that upsert updates existing records."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Insert initial record
+        record = type('Record', (), {})()
+        record.id = 'test-001'
+        record.SRM_ID = 'SRM-051'
+        record.Name = 'Original Name'
+        record.Description = 'Original description'
+
+        await store.upsert([record])
+
+        # Update the same record
+        record.Name = 'Updated Name'
+        record.Description = 'Updated description'
+
+        await store.upsert([record])
+
+        # Verify record was updated, not duplicated
+        result_iterator = await store.search(query="updated", top_k=10)
+        results = [r async for r in result_iterator]
+
+        assert len(results) == 1
+        assert results[0].record.name == 'Updated Name'
+
+    @pytest.mark.asyncio
+    async def test_upsert_empty_list(self):
+        """Test that upserting empty list does nothing."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Should not raise exception
+        await store.upsert([])
+
+
+class TestSQLiteSearchStoreGetById:
+    """Test get_by_id operations."""
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_successful(self):
+        """Test successfully retrieving a record by ID."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Insert record
+        record = type('Record', (), {})()
+        record.id = 'test-123'
+        record.SRM_ID = 'SRM-051'
+        record.Name = 'Storage SRM'
+        record.Description = 'Storage description'
+        record.owner_notes = 'Owner notes'
+        record.hidden_notes = 'Hidden notes'
+
+        await store.upsert([record])
+
+        # Retrieve by ID
+        result = await store.get_by_id('test-123')
+
+        assert result is not None
+        assert result.id == 'test-123'
+        assert result.srm_id == 'SRM-051'
+        assert result.name == 'Storage SRM'
+        assert result.content == 'Storage description'
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_not_found(self):
+        """Test get_by_id when record doesn't exist."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        result = await store.get_by_id('nonexistent-id')
+
+        assert result is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
