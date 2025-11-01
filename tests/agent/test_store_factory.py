@@ -84,5 +84,35 @@ class TestStoreFactory:
             create_vector_store(store_type='invalid_type')
 
 
+@pytest.mark.asyncio
+async def test_sqlite_fixture(sqlite_search_store):
+    """Test that sqlite fixture works."""
+    record = type('Record', (), {})()
+    record.id = 'test-001'
+    record.SRM_ID = 'SRM-001'
+    record.Name = 'Test'
+    record.Description = 'Test'
+
+    await sqlite_search_store.upsert([record])
+    result = await sqlite_search_store.get_by_id('test-001')
+
+    assert result is not None
+
+@pytest.mark.asyncio
+async def test_parametrized_fixture(parametrized_search_store):
+    """Test that parametrized fixture works."""
+    # This test runs twice: SQLite and Azure (if available)
+    record = type('Record', (), {})()
+    record.id = 'test-001'
+    record.SRM_ID = 'SRM-001'
+    record.Name = 'Test'
+    record.Description = 'Test'
+
+    await parametrized_search_store.upsert([record])
+    result = await parametrized_search_store.get_by_id('test-001')
+
+    assert result is not None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

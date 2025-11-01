@@ -21,8 +21,100 @@ Example:
 
 import pytest
 import asyncio
+import os
 from typing import Generator
 from datetime import datetime, timezone
+
+
+@pytest.fixture
+def sqlite_search_store():
+    """
+    Provides SQLite FTS5 search store for testing (in-memory).
+
+    Fast, zero-cost local search store using SQLite's FTS5.
+    Automatically cleaned up after each test.
+
+    Returns:
+        SQLiteSearchStore: In-memory SQLite store instance
+
+    Usage:
+        def test_something(sqlite_search_store):
+            await sqlite_search_store.upsert([...])
+            results = await sqlite_search_store.search("query")
+    """
+    from src.memory.sqlite_search_store import SQLiteSearchStore
+
+    # Use in-memory database for tests
+    store = SQLiteSearchStore(db_path=":memory:")
+    yield store
+
+    # Cleanup
+    store.close()
+
+
+@pytest.fixture(
+    scope="module",
+    params=["sqlite", "azure_search"],
+    ids=["SQLite", "Azure"]
+)
+def parametrized_search_store(request):
+    """
+    Parametrized fixture for integration tests.
+
+    Runs tests against both SQLite (default) and Azure Search.
+    Each test using this fixture will run twice - once with SQLite,
+    once with Azure Search (if credentials available).
+
+    To run only SQLite tests:
+        pytest -k "SQLite"
+
+    To run only Azure tests:
+        pytest -k "Azure"
+
+    Environment Variables:
+        SKIP_AZURE_TESTS=1 - Skip Azure Search tests entirely
+        AZURE_AI_SEARCH_ENDPOINT - Azure endpoint (required for Azure tests)
+        AZURE_AI_SEARCH_API_KEY - Azure API key (required for Azure tests)
+        AZURE_AI_SEARCH_INDEX_NAME - Azure index name (required for Azure tests)
+
+    Returns:
+        VectorStoreBase: Either SQLiteSearchStore or AzureAISearchStore
+
+    Usage:
+        @pytest.mark.integration
+        def test_search(parametrized_search_store):
+            # This test runs twice: once with SQLite, once with Azure
+            store = parametrized_search_store
+            await store.upsert([...])
+            results = await store.search("query")
+    """
+    if request.param == "sqlite":
+        from src.memory.sqlite_search_store import SQLiteSearchStore
+        store = SQLiteSearchStore(db_path=":memory:")
+        yield store
+        store.close()
+
+    elif request.param == "azure_search":
+        # Skip Azure tests if environment variable set
+        if os.getenv("SKIP_AZURE_TESTS"):
+            pytest.skip("Azure Search tests skipped (SKIP_AZURE_TESTS=1)")
+
+        # Check for Azure credentials
+        endpoint = os.getenv("AZURE_AI_SEARCH_ENDPOINT")
+        index_name = os.getenv("AZURE_AI_SEARCH_INDEX_NAME")
+        api_key = os.getenv("AZURE_AI_SEARCH_API_KEY")
+
+        if not all([endpoint, index_name, api_key]):
+            pytest.skip("Azure Search credentials not configured for integration tests")
+
+        from src.memory.azure_search_store import AzureAISearchStore
+        store = AzureAISearchStore(
+            endpoint=endpoint,
+            api_key=api_key,
+            index_name=index_name
+        )
+        yield store
+        # No cleanup needed for Azure
 
 
 @pytest.fixture(scope="session")
@@ -698,7 +790,13 @@ def real_graph_client():
 @pytest.fixture(scope="module")
 def real_search_client():
     """
+    DEPRECATED: Use parametrized_search_store instead.
+
     Provides a real Azure Search client for integration tests.
+
+    This fixture is maintained for backward compatibility but will
+    be removed in a future version. New tests should use
+    parametrized_search_store which supports both SQLite and Azure.
 
     Connects to actual Azure AI Search index using environment variables:
     - AZURE_AI_SEARCH_ENDPOINT
@@ -708,6 +806,13 @@ def real_search_client():
     Note: This will make real API calls to search and update documents.
     Use a dedicated test index to avoid affecting production data.
     """
+    import warnings
+    warnings.warn(
+        "real_search_client is deprecated, use parametrized_search_store instead",
+        DeprecationWarning,
+        stacklevel=2
+    )
+
     import os
     from azure.search.documents import SearchClient
     from azure.core.credentials import AzureKeyCredential
