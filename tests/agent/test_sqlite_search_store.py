@@ -288,5 +288,126 @@ class TestSQLiteSearchStoreGetById:
         assert result is None
 
 
+class TestSQLiteSearchStoreFeedback:
+    """Test feedback score update operations."""
+
+    @pytest.mark.asyncio
+    async def test_update_feedback_scores_positive(self):
+        """Test adding positive feedback to a record."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Insert record
+        record = type('Record', (), {})()
+        record.id = 'test-001'
+        record.SRM_ID = 'SRM-051'
+        record.Name = 'Test SRM'
+        record.Description = 'Test'
+
+        await store.upsert([record])
+
+        # Add positive feedback
+        await store.update_feedback_scores(
+            srm_id='SRM-051',
+            query='storage expansion',
+            feedback_type='positive'
+        )
+
+        # Verify feedback was added
+        result = await store.get_by_id('test-001')
+        assert 'storage expansion' in result.positive_feedback_queries
+        assert result.feedback_score_adjustment == 0.2
+
+    @pytest.mark.asyncio
+    async def test_update_feedback_scores_negative(self):
+        """Test adding negative feedback to a record."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Insert record
+        record = type('Record', (), {})()
+        record.id = 'test-002'
+        record.SRM_ID = 'SRM-052'
+        record.Name = 'Test SRM'
+        record.Description = 'Test'
+
+        await store.upsert([record])
+
+        # Add negative feedback
+        await store.update_feedback_scores(
+            srm_id='SRM-052',
+            query='irrelevant query',
+            feedback_type='negative'
+        )
+
+        # Verify feedback was added
+        result = await store.get_by_id('test-002')
+        assert 'irrelevant query' in result.negative_feedback_queries
+        assert result.feedback_score_adjustment == -0.1
+
+    @pytest.mark.asyncio
+    async def test_update_feedback_scores_reset(self):
+        """Test resetting feedback scores."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Insert record with existing feedback
+        record = type('Record', (), {})()
+        record.id = 'test-003'
+        record.SRM_ID = 'SRM-053'
+        record.Name = 'Test SRM'
+        record.Description = 'Test'
+        record.negative_feedback_queries = ['query1', 'query2']
+        record.positive_feedback_queries = ['query3']
+        record.feedback_score_adjustment = 0.5
+
+        await store.upsert([record])
+
+        # Reset feedback
+        await store.update_feedback_scores(
+            srm_id='SRM-053',
+            query='',
+            feedback_type='reset'
+        )
+
+        # Verify feedback was reset
+        result = await store.get_by_id('test-003')
+        assert result.negative_feedback_queries == []
+        assert result.positive_feedback_queries == []
+        assert result.feedback_score_adjustment == 0.0
+
+    @pytest.mark.asyncio
+    async def test_update_feedback_scores_document_not_found(self):
+        """Test feedback update when document not found."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Should not raise exception
+        await store.update_feedback_scores(
+            srm_id='SRM-999',
+            query='test query',
+            feedback_type='positive'
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_feedback_scores_accumulates(self):
+        """Test that multiple feedback updates accumulate."""
+        store = SQLiteSearchStore(db_path=":memory:")
+
+        # Insert record
+        record = type('Record', (), {})()
+        record.id = 'test-004'
+        record.SRM_ID = 'SRM-054'
+        record.Name = 'Test SRM'
+        record.Description = 'Test'
+
+        await store.upsert([record])
+
+        # Add multiple positive feedbacks
+        await store.update_feedback_scores('SRM-054', 'query1', 'positive')
+        await store.update_feedback_scores('SRM-054', 'query2', 'positive')
+
+        # Verify both feedbacks accumulated
+        result = await store.get_by_id('test-004')
+        assert len(result.positive_feedback_queries) == 2
+        assert result.feedback_score_adjustment == 0.4  # 0.2 + 0.2
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
