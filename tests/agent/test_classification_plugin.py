@@ -1,8 +1,23 @@
 """
-Tests for ClassificationPlugin.
+Classification Plugin Tests
 
-This module tests the email classification plugin which uses LLM to route
-emails to help/dont_help/escalate categories.
+Purpose: Test email classification plugin using LLM to route emails
+         to help/dont_help/escalate categories.
+
+Type: Unit
+Test Count: 11
+
+Key Test Areas:
+- Email classification (help/dont_help/escalate)
+- Confidence threshold validation
+- LLM prompt handling
+- Error handling and recovery
+- Edge cases (empty emails, malformed responses)
+
+Dependencies:
+- classification_plugin fixture
+- mock_kernel fixture
+- mock_error_handler fixture
 """
 
 import pytest
@@ -320,3 +335,29 @@ class TestValidateClassification:
         assert result_data["classification"] == "escalate"
         assert result_data["confidence"] == 0
         assert "Invalid classification result" in result_data["reason"]
+
+
+class TestClassificationPluginInitialization:
+    """Tests for ClassificationPlugin initialization and error handling."""
+
+    def test_should_handle_error_when_loading_prompt_function_fails(
+        self, mock_kernel, mock_error_handler
+    ):
+        """
+        Verify error handler is called when _load_prompt_function fails.
+
+        Tests that if loading the prompt function raises an exception during
+        file operations, the error is properly handled and logged.
+        """
+        # Arrange - Create plugin with patched _load_prompt_function first
+        with patch.object(ClassificationPlugin, '_load_prompt_function'):
+            plugin = ClassificationPlugin(mock_kernel, mock_error_handler)
+        
+        # Act - Now test the actual _load_prompt_function with file error
+        with patch('builtins.open', side_effect=FileNotFoundError("Prompt file not found")):
+            plugin._load_prompt_function()
+
+        # Assert - Error handler should have been called
+        mock_error_handler.handle_error.assert_called_once()
+        call_args = mock_error_handler.handle_error.call_args
+        assert "Prompt file not found" in str(call_args[0][1])

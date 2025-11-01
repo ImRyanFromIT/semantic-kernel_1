@@ -1,0 +1,77 @@
+[run]
+# Source paths to measure
+source = src
+
+# Omit these files from coverage
+omit =
+    */tests/*
+    */__init__.py
+    */conftest.py
+    */site-packages/*
+    */.venv/*
+    */venv/*
+
+# Enable branch coverage
+branch = True
+
+# Parallel mode (for running tests in parallel)
+parallel = False
+
+[report]
+# Show missing lines
+show_missing = True
+
+# Precision for coverage percentage
+precision = 2
+
+# Exclude these lines from coverage
+exclude_lines =
+    # Default pragma
+    pragma: no cover
+
+    # Don't complain about missing debug code
+    def __repr__
+    def __str__
+
+    # Don't complain if tests don't hit defensive assertion code
+    raise AssertionError
+    raise NotImplementedError
+
+    # Don't complain if non-runnable code isn't run
+    if 0:
+    if False:
+    if __name__ == .__main__.:
+
+    # Don't complain about abstract methods
+    @abstractmethod
+    @abc.abstractmethod
+
+    # Don't complain about type checking code
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+
+    # Don't complain about protocol methods
+    \.\.\.
+
+# Ignore errors for source files that can't be found
+ignore_errors = True
+
+# Sort the coverage report by name
+sort = Name
+
+[html]
+# Directory for HTML coverage report
+directory = htmlcov
+
+# Title for HTML report
+title = Semantic Kernel Agent Test Coverage
+
+[xml]
+# XML coverage report output
+output = coverage.xml
+
+[json]
+# JSON coverage report output
+output = coverage.json
+pretty_print = True
+show_contexts = True

@@ -1,8 +1,24 @@
 """
-Tests for StateManager JSONL file operations.
+StateManager Tests
 
-This module tests the StateManager class which handles persistent storage
-of EmailRecord objects in JSONL format with atomic writes and backup recovery.
+Purpose: Test StateManager class for persistent storage of EmailRecord objects
+         in JSONL format with atomic writes and backup recovery.
+
+Type: Unit
+Test Count: 19
+
+Key Test Areas:
+- JSONL file read/write operations
+- Atomic writes with temp files
+- Backup and recovery mechanisms
+- Stale record detection
+- Record append and update operations
+- Conversation tracking
+- File corruption handling
+
+Dependencies:
+- sample_email_record fixture
+- Temporary file system (tmp_path)
 """
 
 import pytest
@@ -283,15 +299,15 @@ class TestStateManagerFind:
         Tests that records with timestamps older than the threshold
         are correctly identified as stale.
         """
-        # Arrange - Create records with different timestamps
-        with freeze_time("2024-01-05T00:00:00"):
+        # Arrange - Create records with different timestamps, timezone-aware
+        with freeze_time("2024-01-05T00:00:00+00:00"):
             old_record = EmailRecord(
                 email_id="old_001",
                 sender="old@test.com",
                 subject="Old",
                 body="Body",
                 received_datetime="2024-01-01T00:00:00Z",
-                timestamp="2024-01-01T00:00:00",  # 4 days ago
+                timestamp="2024-01-01T00:00:00+00:00",  # 4 days ago, timezone-aware
             )
 
             recent_record = EmailRecord(
@@ -300,7 +316,7 @@ class TestStateManagerFind:
                 subject="Recent",
                 body="Body",
                 received_datetime="2024-01-04T12:00:00Z",
-                timestamp="2024-01-04T12:00:00",  # 12 hours ago
+                timestamp="2024-01-04T12:00:00+00:00",  # 12 hours ago, timezone-aware
             )
 
             state_manager.write_state([old_record, recent_record])
