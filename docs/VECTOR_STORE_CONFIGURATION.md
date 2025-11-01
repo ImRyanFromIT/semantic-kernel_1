@@ -96,6 +96,25 @@ VECTOR_STORE_TYPE=sqlite
 SQLITE_DB_PATH=/var/lib/myapp/search.db
 ```
 
+**Data Loading:**
+
+When using SQLite, the chatbot automatically loads data from `data/srm_index.csv` on startup:
+
+```bash
+python run_chatbot.py
+```
+
+Expected startup output:
+```
+[*] Creating vector store...
+[*] Using SQLite FTS5 store (db_path: :memory:)
+[+] Vector store created
+[*] Loading SRM data from srm_index.csv...
+[+] Loaded and indexed 55 SRM records
+```
+
+**Note:** The CSV file is reloaded every time the chatbot starts. For `:memory:` databases, this is required. For persistent databases (e.g., `data/srm.db`), data is always refreshed with the latest CSV content.
+
 **Features:**
 - BM25 ranking algorithm (same as Azure)
 - Full-text search across all searchable fields
@@ -383,6 +402,18 @@ async def advanced_example():
 ```
 
 ## Troubleshooting
+
+### Chatbot fails to start with "FileNotFoundError: data/srm_index.csv"
+
+**Problem:** The SQLite store requires `data/srm_index.csv` to exist on startup.
+
+**Solution:**
+1. Verify file exists: `ls data/srm_index.csv`
+2. If missing, ensure you're in the project root directory
+3. Check that the file wasn't accidentally deleted
+4. The file should have been included in the repository
+
+If the file is genuinely missing, the chatbot cannot start with SQLite mode.
 
 ### SQLite: "no such table: srm_fts"
 
