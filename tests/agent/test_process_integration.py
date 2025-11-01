@@ -423,7 +423,6 @@ class TestSRMHelpProcess:
         mock_config,
         state_manager,
         mock_response_handler,
-        real_search_client,
         integration_test_emails
     ):
         """
@@ -434,7 +433,18 @@ class TestSRMHelpProcess:
         Verifies: Actual SRM document updated in search index
 
         Note: This is one of the 3 critical tests that uses real Azure OpenAI API.
+        This test remains Azure-only since it's testing real Azure OpenAI integration.
         """
+        import os
+
+        # Skip if Azure Search credentials not available
+        endpoint = os.getenv("AZURE_AI_SEARCH_ENDPOINT")
+        index_name = os.getenv("AZURE_AI_SEARCH_INDEX_NAME")
+        api_key = os.getenv("AZURE_AI_SEARCH_API_KEY")
+
+        if not all([endpoint, index_name, api_key]):
+            pytest.skip("Azure Search credentials not configured for integration tests")
+
         from src.processes.agent.srm_help_process import (
             ExtractDataStep,
             SearchSRMStep,
@@ -471,12 +481,11 @@ class TestSRMHelpProcess:
 
         # Load search plugin
         from src.plugins.agent.search_plugin import SearchPlugin
-        import os
 
         search_plugin = SearchPlugin(
-            search_endpoint=os.getenv("AZURE_AI_SEARCH_ENDPOINT"),
-            index_name=os.getenv("AZURE_AI_SEARCH_INDEX_NAME"),
-            api_key=os.getenv("AZURE_AI_SEARCH_API_KEY"),
+            search_endpoint=endpoint,
+            index_name=index_name,
+            api_key=api_key,
             error_handler=error_handler,
             mock_updates=False  # Real updates!
         )
