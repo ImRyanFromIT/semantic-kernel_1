@@ -1,0 +1,1 @@
+deprecated using and skills now, but these were where I started
