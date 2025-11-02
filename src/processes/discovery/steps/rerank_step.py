@@ -180,7 +180,7 @@ class RerankStep(KernelProcessStep):
                     candidate['llm_reasoning'] = 'No score provided'
             
         except Exception as e:
-            logger.warning("LLM scoring failed, falling back to BM25 scores", extra={"error": str(e)})
+            logger.debug("LLM scoring failed, falling back to BM25 scores", extra={"error": str(e)})
             # Fallback to original BM25 scores normalized to 0-100
             for candidate in candidates:
                 # Normalize BM25 score (typically 0-10) to 0-100

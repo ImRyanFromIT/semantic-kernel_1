@@ -51,46 +51,44 @@ class SRMDataLoader:
     async def load_srm_catalog(self, csv_path: str | Path) -> list[SRMRecord]:
         '''
         Load SRM catalog from CSV file.
-        
+
         Args:
-            csv_path: Path to the srm_catalog.csv file
-            
+            csv_path: Path to the srm_index.csv file
+
         Returns:
             List of SRMRecord objects
         '''
         csv_path = Path(csv_path)
-        
+
         if not csv_path.exists():
             raise FileNotFoundError(f"SRM catalog file not found: {csv_path}")
-        
+
         # Read CSV
         df = pd.read_csv(csv_path)
-        
+
         # Parse and create SRM records
         records = []
         for _, row in df.iterrows():
-            # Parse metadata
-            name, category = self.parse_srm_metadata(row['srm_metadata'])
-            
-            # Create record
+            # Create record from srm_index.csv format
             record = SRMRecord(
-                name=name,
-                category=category,
-                owning_team=row['owning_team'],
-                use_case=row['use_case'],
-                text=f"{name} {category} {row['use_case']} {row['owning_team']}",
+                id=row['SRM_ID'],
+                name=row['Name'],
+                category=row['Type'],
+                owning_team=row['Team'],
+                use_case=row['Description'],
+                text=f"{row['Name']} {row['Type']} {row['Description']} {row['Team']}",
             )
             records.append(record)
-        
+
         return records
     
-    async def load_and_index(self, csv_path: str | Path = "data/srm_catalog.csv") -> int:
+    async def load_and_index(self, csv_path: str | Path = "data/srm_index.csv") -> int:
         '''
         Load SRM catalog and index it in the vector store.
-        
+
         Args:
-            csv_path: Path to the srm_catalog.csv file
-            
+            csv_path: Path to the srm_index.csv file
+
         Returns:
             Number of records indexed
         '''

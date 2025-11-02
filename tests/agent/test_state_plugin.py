@@ -1,8 +1,22 @@
 """
-Tests for StatePlugin.
+State Plugin Tests
 
-This module tests the state plugin which wraps StateManager and provides
-kernel_function methods for state operations.
+Purpose: Test state plugin wrapping StateManager with kernel_function
+         methods for state operations.
+
+Type: Unit
+Test Count: 7
+
+Key Test Areas:
+- Loading state from JSONL file
+- Appending records
+- Updating existing records
+- Kernel function registration
+- Error handling
+
+Dependencies:
+- state_plugin fixture
+- mock_state_manager fixture
 """
 
 import pytest
