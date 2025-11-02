@@ -165,7 +165,7 @@ class ChatHistoryManager:
                 self.reduce_with_summarization()
                 return
             except Exception as e:
-                logger.warning(f"Summarization failed, falling back to sliding window: {e}")
+                logger.debug(f"Summarization failed, falling back to sliding window: {e}")
 
         # Fall back to sliding window
         self.reduce_sliding_window()

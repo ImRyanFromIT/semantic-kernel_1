@@ -48,6 +48,7 @@ class AnswerStep(KernelProcessStep):
         selected_srm = input_data.get('selected_srm')
         confidence = input_data.get('confidence', 0.0)
         alternatives = input_data.get('alternatives', [])
+        ranked_candidates = input_data.get('ranked_candidates', [])
         session_id = input_data.get('session_id', '')
         user_query = input_data.get('user_query', '')
         result_container = input_data.get('result_container', {})
@@ -65,6 +66,7 @@ class AnswerStep(KernelProcessStep):
             result_container['final_answer'] = answer
             result_container['selected_id'] = None
             result_container['confidence'] = confidence
+            result_container['retrieved_context'] = []  # No context for fallback
             
             # Emit public event with answer data
             await context.emit_event(
@@ -85,11 +87,13 @@ class AnswerStep(KernelProcessStep):
         )
         
         logger.info("Answer formatted successfully", extra={"session_id": session_id, "srm_id": selected_srm.get('srm_id')})
-        
+
         # Store result in container for entry point to retrieve
         result_container['final_answer'] = answer
         result_container['selected_id'] = selected_srm.get('srm_id')
         result_container['confidence'] = confidence
+        # Store retrieved context for evaluation (top 3 ranked candidates)
+        result_container['retrieved_context'] = ranked_candidates if ranked_candidates else [selected_srm] + alternatives
         
         # Emit public event with answer data
         await context.emit_event(

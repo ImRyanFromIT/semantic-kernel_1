@@ -71,6 +71,7 @@ class SRMDataLoader:
         for _, row in df.iterrows():
             # Create record from srm_index.csv format
             record = SRMRecord(
+                id=row['SRM_ID'],
                 name=row['Name'],
                 category=row['Type'],
                 owning_team=row['Team'],

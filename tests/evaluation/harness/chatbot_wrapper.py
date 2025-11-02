@@ -57,7 +57,7 @@ class ChatbotWrapper:
 
         if store_type == 'in_memory':
             data_loader = SRMDataLoader(self.vector_store)
-            await data_loader.load_and_index("data/srm_catalog.csv")
+            await data_loader.load_and_index("data/srm_index.csv")
         else:
             # Azure AI Search - ensure collection exists
             await self.vector_store.ensure_collection_exists()
@@ -72,7 +72,7 @@ class ChatbotWrapper:
         self._initialized = True
         print("[+] Chatbot initialized for evaluation")
 
-    async def query(self, user_query: str) -> str:
+    async def query(self, user_query: str) -> dict:
         """
         Run a single query through the chatbot.
 
@@ -80,10 +80,16 @@ class ChatbotWrapper:
             user_query: The user's question
 
         Returns:
-            The chatbot's response
+            Dictionary containing:
+            - response: The chatbot's text response
+            - context: List of retrieved documents/SRMs
+            - metadata: Processing information (timing, num_retrieved, etc.)
         """
         if not self._initialized:
             await self.initialize()
+
+        import time
+        start_time = time.time()
 
         # Generate session ID
         session_id = str(uuid.uuid4())[:8]
@@ -115,19 +121,53 @@ class ChatbotWrapper:
 
                 # Extract result
                 result_data = result_container
+                processing_time_ms = int((time.time() - start_time) * 1000)
 
-                if result_data:
-                    if 'rejection_message' in result_data:
-                        return f"[!] {result_data['rejection_message']}"
-                    elif 'clarification' in result_data:
-                        return f"[?] {result_data['clarification']}"
-                    elif 'final_answer' in result_data:
-                        return result_data['final_answer']
+                # Extract context (retrieved SRMs)
+                retrieved_context = result_data.get('retrieved_context', [])
 
-                return "Process completed but no result was generated."
+                # Format context as strings for evaluation
+                context_strings = []
+                for candidate in retrieved_context:
+                    context_str = f"{candidate.get('name', '')}: {candidate.get('use_case', '')}"
+                    context_strings.append(context_str)
+
+                # Build response
+                response = ""
+                if 'rejection_message' in result_data:
+                    response = f"[!] {result_data['rejection_message']}"
+                elif 'clarification' in result_data:
+                    response = f"[?] {result_data['clarification']}"
+                elif 'final_answer' in result_data:
+                    response = result_data['final_answer']
+                else:
+                    response = "Process completed but no result was generated."
+
+                # Return structured result
+                return {
+                    "response": response,
+                    "context": context_strings,
+                    "metadata": {
+                        "session_id": session_id,
+                        "processing_time_ms": processing_time_ms,
+                        "num_retrieved": len(retrieved_context),
+                        "selected_srm_id": result_data.get('selected_id'),
+                        "confidence": result_data.get('confidence', 0.0),
+                    }
+                }
 
         except Exception as e:
-            return f"[!] An error occurred: {str(e)}"
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            return {
+                "response": f"[!] An error occurred: {str(e)}",
+                "context": [],
+                "metadata": {
+                    "session_id": session_id,
+                    "processing_time_ms": processing_time_ms,
+                    "num_retrieved": 0,
+                    "error": str(e),
+                }
+            }
 
     def query_sync(self, user_query: str) -> str:
         """

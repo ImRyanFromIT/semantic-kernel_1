@@ -212,7 +212,7 @@ __marimo__/
 
 /logs
 
-# Application state files
+# Application/Project state files
 src/state/*.jsonl
 src/state/*.log
 src/state/*.backuplogs/
