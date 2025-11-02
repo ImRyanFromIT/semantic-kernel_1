@@ -1,1 +1,1 @@
-deprecated using and skills now, but these were where I started
+deprecated and using skills now, but these were where I started
