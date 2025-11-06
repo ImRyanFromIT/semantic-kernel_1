@@ -361,6 +361,45 @@ This project uses:
 - **Microsoft Graph**: Email integration
 - **Pydantic**: Data validation
 
+## CLI Maintainer Agent
+
+Interactive REPL agent for managing SRM metadata.
+
+### Quick Start
+
+1. Start chatbot service:
+   ```bash
+   python run_chatbot.py
+   ```
+
+2. In another terminal, start CLI maintainer:
+   ```bash
+   python run_cli_maintainer.py
+   ```
+
+3. Interact naturally:
+   ```
+   CLI Maintainer> update the storage SRM owner notes to include SLA info
+   ```
+
+### Documentation
+
+See [CLI Maintainer Guide](docs/CLI_MAINTAINER_GUIDE.md) for full usage instructions.
+
+### Architecture
+
+- **CLI Agent**: Semantic Kernel ChatCompletionAgent with auto function calling
+- **API Client Plugin**: Makes HTTP calls to chatbot maintainer API
+- **Chatbot Service**: FastAPI service that manages vector store
+- **Vector Store**: In-memory store (default) for SRM data
+
+### Demo Environment
+
+For demo purposes:
+- Chatbot URL is hardcoded in CLI maintainer
+- Maintainer API endpoints are at `/api/maintainer/*`
+- All updates go through the chatbot service (no direct vector store access)
+
 ---
 
 Built with Microsoft Semantic Kernel for Python

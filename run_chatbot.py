@@ -12,11 +12,12 @@ Usage:
 
 import asyncio
 import argparse
+import json
 import uuid
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from typing import Dict, Any, TypedDict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -110,6 +111,117 @@ class SrmUpdateChatResponse(BaseModel):
     status: str  # "disabled" for this service
 
 
+# TypedDict definitions for maintainer API responses
+class SRMSearchResult(TypedDict):
+    """Structure for SRM search results."""
+    id: str
+    name: str
+    category: str
+    use_case: str
+    score: float
+
+
+class SRMDetail(TypedDict):
+    """Structure for detailed SRM information."""
+    id: str
+    name: str
+    category: str
+    use_case: str
+    owner_notes: str
+    hidden_notes: str
+
+
+class ChangeRecord(TypedDict):
+    """Structure for tracking field changes."""
+    field: str
+    before: str
+    after: str
+
+
+class ConciergeSearchRequest(BaseModel):
+    """Request model for concierge search endpoint."""
+    query: str
+    top_k: int = 5
+
+
+class ConciergeSearchResponse(BaseModel):
+    """Response model for concierge search endpoint."""
+    results: list[SRMSearchResult]
+
+
+class ConciergeGetRequest(BaseModel):
+    """Request model for concierge get by ID endpoint."""
+    srm_id: str
+
+
+class ConciergeGetResponse(BaseModel):
+    """Response model for concierge get by ID endpoint."""
+    srm: SRMDetail | None
+    error: str | None = None
+
+
+class ConciergeUpdateRequest(BaseModel):
+    """Request model for concierge update endpoint."""
+    srm_id: str
+    updates: dict[str, str]  # Field name -> new value
+
+
+class ConciergeUpdateResponse(BaseModel):
+    """Response model for concierge update endpoint."""
+    success: bool
+    srm_id: str
+    srm_name: str | None = None
+    changes: list[ChangeRecord] | None = None
+    error: str | None = None
+
+
+class ConciergeBatchUpdateRequest(BaseModel):
+    """Request model for concierge batch update endpoint."""
+    filter: dict[str, str]  # Filter criteria (team, type, technology)
+    updates: dict[str, str]  # Field name -> new value
+
+
+class ConciergeBatchUpdateResponse(BaseModel):
+    """Response model for concierge batch update endpoint."""
+    success: bool
+    updated_count: int
+    updated_ids: list[str]
+    failures: list[dict[str, str]] = []  # List of {srm_id, error}
+    error: str | None = None
+
+
+class TempSRMCreateRequest(BaseModel):
+    """Request model for temp SRM creation."""
+    name: str
+    category: str
+    owning_team: str
+    use_case: str
+
+
+class TempSRMCreateResponse(BaseModel):
+    """Response model for temp SRM creation."""
+    success: bool
+    srm_id: str | None = None
+    srm: dict | None = None
+    error: str | None = None
+
+
+class TempSRMListResponse(BaseModel):
+    """Response model for listing temp SRMs."""
+    temp_srms: list[dict]
+
+
+class TempSRMDeleteRequest(BaseModel):
+    """Request model for deleting temp SRM."""
+    srm_id: str
+
+
+class TempSRMDeleteResponse(BaseModel):
+    """Response model for deleting temp SRM."""
+    success: bool
+    error: str | None = None
+
+
 # ============================================================================
 # STARTUP
 # ============================================================================
@@ -178,9 +290,26 @@ async def startup_event():
     )
     print("[+] Feedback system initialized")
 
+    # Initialize concierge plugin for API endpoints
+    print("[*] Initializing concierge plugin...")
+    from src.plugins.concierge.srm_metadata_plugin import SRMMetadataPlugin
+    app.state.concierge_plugin = SRMMetadataPlugin(
+        vector_store=app.state.vector_store
+    )
+    print("[+] Concierge plugin initialized")
+
     # Initialize session storage for multi-turn conversations
     app.state.chat_sessions: Dict[str, Dict[str, Any]] = {}
     print("[+] Chat session management initialized")
+
+    # Initialize temp SRM storage
+    app.state.temp_srms: Dict[str, Any] = {}  # Maps SRM-TEMP-XXX to SRMRecord
+    app.state.temp_id_counter: int = 1
+    print("[+] Temp SRM storage initialized")
+
+    # Store server configuration (will be set by main())
+    app.state.server_host = os.getenv('CHATBOT_HOST', '0.0.0.0')
+    app.state.server_port = int(os.getenv('CHATBOT_PORT', '8000'))
 
     # Start background task for session cleanup
     asyncio.create_task(_cleanup_old_sessions())
@@ -556,6 +685,373 @@ async def srm_update_chat_endpoint(request: SrmUpdateChatRequest):
     )
 
 
+# ============================================================================
+# CONCIERGE API ENDPOINTS
+# ============================================================================
+
+@app.post("/api/concierge/search", response_model=ConciergeSearchResponse)
+async def concierge_search_endpoint(request: ConciergeSearchRequest):
+    """
+    Search for SRMs by keywords (concierge endpoint).
+
+    This endpoint is used by the CLI concierge to search for SRMs.
+    It calls the concierge plugin which uses the vector store.
+
+    Args:
+        request: Search request with query and top_k
+
+    Returns:
+        Search results with SRM IDs, names, categories
+    """
+    # Validate input
+    if not request.query or not request.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    try:
+        # Call concierge plugin search function
+        result_json = await app.state.concierge_plugin.search_srm(
+            query=request.query,
+            top_k=request.top_k
+        )
+
+        results = json.loads(result_json)
+
+        return ConciergeSearchResponse(results=results)
+
+    except Exception as e:
+        print(f"[!] Error in concierge search: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Search failed: {str(e)}"
+        )
+
+
+@app.post("/api/concierge/get", response_model=ConciergeGetResponse)
+async def concierge_get_endpoint(request: ConciergeGetRequest):
+    """
+    Get specific SRM by ID (concierge endpoint).
+
+    Args:
+        request: Get request with srm_id
+
+    Returns:
+        SRM details or error
+    """
+    # Validate input
+    if not request.srm_id or not request.srm_id.strip():
+        raise HTTPException(status_code=400, detail="SRM ID cannot be empty")
+
+    try:
+        # Call concierge plugin get function
+        result_json = await app.state.concierge_plugin.get_srm_by_id(
+            srm_id=request.srm_id
+        )
+
+        result = json.loads(result_json)
+
+        if not result.get("success"):
+            return ConciergeGetResponse(srm=None, error=result.get("error", "Unknown error"))
+
+        return ConciergeGetResponse(srm=result["srm"], error=None)
+
+    except Exception as e:
+        print(f"[!] Error in concierge get: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Get failed: {str(e)}"
+        )
+
+
+@app.post("/api/concierge/update", response_model=ConciergeUpdateResponse)
+async def concierge_update_endpoint(request: ConciergeUpdateRequest):
+    """
+    Update SRM metadata (concierge endpoint).
+
+    Updates fields like owner_notes, hidden_notes, etc. in the vector store.
+
+    Args:
+        request: Update request with srm_id and updates dict
+
+    Returns:
+        Update result with success status and before/after values
+    """
+    # Validate input
+    if not request.srm_id or not request.srm_id.strip():
+        raise HTTPException(status_code=400, detail="SRM ID cannot be empty")
+    if not request.updates:
+        raise HTTPException(status_code=400, detail="Updates cannot be empty")
+
+    try:
+        # Convert updates dict to JSON string for plugin
+        updates_json = json.dumps(request.updates)
+
+        # Call concierge plugin update function
+        result_json = await app.state.concierge_plugin.update_srm_metadata(
+            srm_id=request.srm_id,
+            updates=updates_json
+        )
+
+        result = json.loads(result_json)
+
+        if not result.get("success"):
+            return ConciergeUpdateResponse(
+                success=False,
+                srm_id=request.srm_id,
+                error=result.get("error", "Unknown error")
+            )
+
+        return ConciergeUpdateResponse(
+            success=True,
+            srm_id=result["srm_id"],
+            srm_name=result.get("srm_name"),
+            changes=result.get("changes", []),
+            error=None
+        )
+
+    except Exception as e:
+        print(f"[!] Error in concierge update: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Update failed: {str(e)}"
+        )
+
+
+@app.post("/api/concierge/batch/update", response_model=ConciergeBatchUpdateResponse)
+async def concierge_batch_update_endpoint(request: ConciergeBatchUpdateRequest):
+    """
+    Batch update SRMs matching filter criteria.
+
+    Supports filtering by:
+    - team: Exact match on owning_team
+    - type: Exact match on category
+
+    Max 20 SRMs per batch for safety.
+    """
+    if not request.filter:
+        raise HTTPException(status_code=400, detail="Filter cannot be empty")
+    if not request.updates:
+        raise HTTPException(status_code=400, detail="Updates cannot be empty")
+
+    try:
+        # Convert to JSON strings for plugin
+        filter_json = json.dumps(request.filter)
+        updates_json = json.dumps(request.updates)
+
+        # Call concierge plugin batch update
+        result_json = await app.state.concierge_plugin.batch_update_srms(
+            filter_json=filter_json,
+            updates=updates_json
+        )
+
+        result = json.loads(result_json)
+
+        if not result.get("success"):
+            return ConciergeBatchUpdateResponse(
+                success=False,
+                updated_count=0,
+                updated_ids=[],
+                error=result.get("error", "Unknown error")
+            )
+
+        return ConciergeBatchUpdateResponse(
+            success=True,
+            updated_count=result["updated_count"],
+            updated_ids=result["updated_ids"],
+            failures=result.get("failures", [])
+        )
+
+    except Exception as e:
+        print(f"[!] Error in batch update: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Batch update failed: {str(e)}"
+        )
+
+
+@app.get("/api/concierge/health")
+async def concierge_health_endpoint():
+    """
+    Health check for concierge API.
+
+    Verifies that concierge plugin is initialized and ready.
+    """
+    try:
+        has_plugin = hasattr(app.state, 'concierge_plugin')
+        has_vector_store = hasattr(app.state, 'vector_store')
+
+        status = "healthy" if (has_plugin and has_vector_store) else "degraded"
+
+        return {
+            "status": status,
+            "service": "concierge-api",
+            "plugin_initialized": has_plugin,
+            "vector_store_initialized": has_vector_store,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@app.get("/api/concierge/stats")
+async def concierge_stats_endpoint():
+    """
+    Get concierge system statistics.
+
+    Returns current state information for help command:
+    - Total SRM count
+    - Temp SRM count (always 0 for now)
+    - Chatbot URL
+    """
+    # Build chatbot URL from app state configuration
+    host = getattr(app.state, 'server_host', '0.0.0.0')
+    port = getattr(app.state, 'server_port', 8000)
+    # Use localhost for local binding, otherwise use actual host
+    url_host = 'localhost' if host in ('0.0.0.0', '127.0.0.1') else host
+    chatbot_url = f"http://{url_host}:{port}"
+
+    try:
+        # Count total SRMs in vector store
+        # For in-memory store, we need to count records
+        total_count = 0
+        if hasattr(app.state, 'vector_store'):
+            # Search with empty query to get all records (limited to top 1000 for count)
+            # Increase limit to 1000 to handle larger SRM datasets
+            results = []
+            async for result in await app.state.vector_store.search("", top_k=1000):
+                results.append(result)
+            total_count = len(results)
+
+        # Count temp SRMs
+        temp_count = len(app.state.temp_srms) if hasattr(app.state, 'temp_srms') else 0
+
+        return {
+            "total_srms": total_count,
+            "temp_srms": temp_count,
+            "chatbot_url": chatbot_url,
+            "status": "healthy"
+        }
+    except Exception as e:
+        return {
+            "total_srms": 0,
+            "temp_srms": 0,
+            "chatbot_url": chatbot_url,
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.post("/api/concierge/temp/create", response_model=TempSRMCreateResponse)
+async def temp_srm_create_endpoint(request: TempSRMCreateRequest):
+    """
+    Create temporary SRM (session-scoped, not persisted).
+
+    Temp SRMs:
+    - Get IDs like SRM-TEMP-001, SRM-TEMP-002, etc.
+    - Stored in app.state.temp_srms (in-memory)
+    - Appear in search results with [TEMP] marker
+    - Lost on restart
+    """
+    try:
+        # Generate temp ID
+        temp_id = f"SRM-TEMP-{app.state.temp_id_counter:03d}"
+        app.state.temp_id_counter += 1
+
+        # Create SRMRecord
+        from src.models.srm_record import SRMRecord
+
+        temp_srm = SRMRecord(
+            id=temp_id,
+            name=request.name,
+            category=request.category,
+            owning_team=request.owning_team,
+            use_case=request.use_case,
+            text=f"{request.name} {request.category} {request.use_case} {request.owning_team}",
+            owner_notes="[TEMP SRM - Not persisted to CSV]",
+            hidden_notes=""
+        )
+
+        # Store in temp storage
+        app.state.temp_srms[temp_id] = temp_srm
+
+        # Also add to vector store for search (in-memory only)
+        await app.state.vector_store.upsert([temp_srm])
+
+        print(f"[+] Created temp SRM: {temp_id} - {request.name}")
+
+        return TempSRMCreateResponse(
+            success=True,
+            srm_id=temp_id,
+            srm={
+                "id": temp_id,
+                "name": request.name,
+                "category": request.category,
+                "owning_team": request.owning_team,
+                "use_case": request.use_case,
+                "owner_notes": temp_srm.owner_notes
+            }
+        )
+
+    except Exception as e:
+        print(f"[!] Error creating temp SRM: {e}")
+        return TempSRMCreateResponse(
+            success=False,
+            error=str(e)
+        )
+
+
+@app.get("/api/concierge/temp/list", response_model=TempSRMListResponse)
+async def temp_srm_list_endpoint():
+    """List all temporary SRMs."""
+    try:
+        temp_list = []
+        for srm_id, srm in app.state.temp_srms.items():
+            temp_list.append({
+                "id": srm.id,
+                "name": srm.name,
+                "category": srm.category,
+                "owning_team": srm.owning_team,
+                "use_case": srm.use_case
+            })
+
+        return TempSRMListResponse(temp_srms=temp_list)
+
+    except Exception as e:
+        print(f"[!] Error listing temp SRMs: {e}")
+        return TempSRMListResponse(temp_srms=[])
+
+
+@app.post("/api/concierge/temp/delete", response_model=TempSRMDeleteResponse)
+async def temp_srm_delete_endpoint(request: TempSRMDeleteRequest):
+    """Delete temporary SRM."""
+    try:
+        if request.srm_id not in app.state.temp_srms:
+            return TempSRMDeleteResponse(
+                success=False,
+                error=f"Temp SRM {request.srm_id} not found"
+            )
+
+        # Remove from temp storage
+        del app.state.temp_srms[request.srm_id]
+
+        # Note: Can't easily remove from vector store in SK
+        # It will be gone on restart anyway
+
+        print(f"[+] Deleted temp SRM: {request.srm_id}")
+
+        return TempSRMDeleteResponse(success=True)
+
+    except Exception as e:
+        print(f"[!] Error deleting temp SRM: {e}")
+        return TempSRMDeleteResponse(
+            success=False,
+            error=str(e)
+        )
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -649,6 +1145,11 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Set environment variables for server configuration so startup_event can access them
+    import os
+    os.environ['CHATBOT_HOST'] = args.host
+    os.environ['CHATBOT_PORT'] = str(args.port)
 
     import uvicorn
 

@@ -3,7 +3,7 @@ pydantic
 pandas
 azure-identity
 python-dotenv
-azure-search-documents
+# azure-search-documents (deprecated - see archived/azure_search/)
 fastapi
 uvicorn
 msgraph-sdk
