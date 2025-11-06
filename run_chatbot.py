@@ -12,11 +12,12 @@ Usage:
 
 import asyncio
 import argparse
+import json
 import uuid
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from typing import Dict, Any, TypedDict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -110,6 +111,33 @@ class SrmUpdateChatResponse(BaseModel):
     status: str  # "disabled" for this service
 
 
+# TypedDict definitions for maintainer API responses
+class SRMSearchResult(TypedDict):
+    """Structure for SRM search results."""
+    id: str
+    name: str
+    category: str
+    use_case: str
+    score: float
+
+
+class SRMDetail(TypedDict):
+    """Structure for detailed SRM information."""
+    id: str
+    name: str
+    category: str
+    use_case: str
+    owner_notes: str
+    hidden_notes: str
+
+
+class ChangeRecord(TypedDict):
+    """Structure for tracking field changes."""
+    field: str
+    before: str
+    after: str
+
+
 class MaintainerSearchRequest(BaseModel):
     """Request model for maintainer search endpoint."""
     query: str
@@ -118,7 +146,7 @@ class MaintainerSearchRequest(BaseModel):
 
 class MaintainerSearchResponse(BaseModel):
     """Response model for maintainer search endpoint."""
-    results: list[dict]
+    results: list[SRMSearchResult]
 
 
 class MaintainerGetRequest(BaseModel):
@@ -128,14 +156,14 @@ class MaintainerGetRequest(BaseModel):
 
 class MaintainerGetResponse(BaseModel):
     """Response model for maintainer get by ID endpoint."""
-    srm: dict | None
+    srm: SRMDetail | None
     error: str | None = None
 
 
 class MaintainerUpdateRequest(BaseModel):
     """Request model for maintainer update endpoint."""
     srm_id: str
-    updates: dict  # e.g., {"owner_notes": "new text"}
+    updates: dict[str, str]  # Field name -> new value
 
 
 class MaintainerUpdateResponse(BaseModel):
@@ -143,7 +171,7 @@ class MaintainerUpdateResponse(BaseModel):
     success: bool
     srm_id: str
     srm_name: str | None = None
-    changes: list[dict] | None = None
+    changes: list[ChangeRecord] | None = None
     error: str | None = None
 
 
@@ -598,6 +626,165 @@ async def srm_update_chat_endpoint(request: SrmUpdateChatRequest):
         response=response_message,
         status="disabled"
     )
+
+
+# ============================================================================
+# MAINTAINER API ENDPOINTS
+# ============================================================================
+
+@app.post("/api/maintainer/search", response_model=MaintainerSearchResponse)
+async def maintainer_search_endpoint(request: MaintainerSearchRequest):
+    """
+    Search for SRMs by keywords (maintainer endpoint).
+
+    This endpoint is used by the CLI maintainer to search for SRMs.
+    It calls the maintainer plugin which uses the vector store.
+
+    Args:
+        request: Search request with query and top_k
+
+    Returns:
+        Search results with SRM IDs, names, categories
+    """
+    # Validate input
+    if not request.query or not request.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    try:
+        # Call maintainer plugin search function
+        result_json = await app.state.maintainer_plugin.search_srm(
+            query=request.query,
+            top_k=request.top_k
+        )
+
+        results = json.loads(result_json)
+
+        return MaintainerSearchResponse(results=results)
+
+    except Exception as e:
+        print(f"[!] Error in maintainer search: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Search failed: {str(e)}"
+        )
+
+
+@app.post("/api/maintainer/get", response_model=MaintainerGetResponse)
+async def maintainer_get_endpoint(request: MaintainerGetRequest):
+    """
+    Get specific SRM by ID (maintainer endpoint).
+
+    Args:
+        request: Get request with srm_id
+
+    Returns:
+        SRM details or error
+    """
+    # Validate input
+    if not request.srm_id or not request.srm_id.strip():
+        raise HTTPException(status_code=400, detail="SRM ID cannot be empty")
+
+    try:
+        # Call maintainer plugin get function
+        result_json = await app.state.maintainer_plugin.get_srm_by_id(
+            srm_id=request.srm_id
+        )
+
+        result = json.loads(result_json)
+
+        if not result.get("success"):
+            return MaintainerGetResponse(srm=None, error=result.get("error", "Unknown error"))
+
+        return MaintainerGetResponse(srm=result["srm"], error=None)
+
+    except Exception as e:
+        print(f"[!] Error in maintainer get: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Get failed: {str(e)}"
+        )
+
+
+@app.post("/api/maintainer/update", response_model=MaintainerUpdateResponse)
+async def maintainer_update_endpoint(request: MaintainerUpdateRequest):
+    """
+    Update SRM metadata (maintainer endpoint).
+
+    Updates fields like owner_notes, hidden_notes, etc. in the vector store.
+
+    Args:
+        request: Update request with srm_id and updates dict
+
+    Returns:
+        Update result with success status and before/after values
+    """
+    # Validate input
+    if not request.srm_id or not request.srm_id.strip():
+        raise HTTPException(status_code=400, detail="SRM ID cannot be empty")
+    if not request.updates:
+        raise HTTPException(status_code=400, detail="Updates cannot be empty")
+
+    try:
+        # Convert updates dict to JSON string for plugin
+        updates_json = json.dumps(request.updates)
+
+        # Call maintainer plugin update function
+        result_json = await app.state.maintainer_plugin.update_srm_metadata(
+            srm_id=request.srm_id,
+            updates=updates_json
+        )
+
+        result = json.loads(result_json)
+
+        if not result.get("success"):
+            return MaintainerUpdateResponse(
+                success=False,
+                srm_id=request.srm_id,
+                error=result.get("error", "Unknown error")
+            )
+
+        return MaintainerUpdateResponse(
+            success=True,
+            srm_id=result["srm_id"],
+            srm_name=result.get("srm_name"),
+            changes=result.get("changes", []),
+            error=None
+        )
+
+    except Exception as e:
+        print(f"[!] Error in maintainer update: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Update failed: {str(e)}"
+        )
+
+
+@app.get("/api/maintainer/health")
+async def maintainer_health_endpoint():
+    """
+    Health check for maintainer API.
+
+    Verifies that maintainer plugin is initialized and ready.
+    """
+    try:
+        has_plugin = hasattr(app.state, 'maintainer_plugin')
+        has_vector_store = hasattr(app.state, 'vector_store')
+
+        status = "healthy" if (has_plugin and has_vector_store) else "degraded"
+
+        return {
+            "status": status,
+            "service": "maintainer-api",
+            "plugin_initialized": has_plugin,
+            "vector_store_initialized": has_vector_store,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 @app.get("/health")

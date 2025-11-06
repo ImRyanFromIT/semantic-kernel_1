@@ -75,24 +75,26 @@ class SRMMetadataPlugin:
             for field in update_data.keys():
                 before_state[field] = getattr(record, field, "")
 
-            # Apply updates
+            # Apply updates (only allow specific fields)
+            UPDATABLE_FIELDS = {"owner_notes", "hidden_notes"}
             for field, value in update_data.items():
-                if hasattr(record, field):
-                    setattr(record, field, value)
-                else:
-                    logger.warning(f"Field {field} not found on SRMRecord")
+                if field not in UPDATABLE_FIELDS:
+                    logger.warning(f"Attempted to update non-updatable field: {field}")
+                    continue
+                setattr(record, field, value)
 
             # Upsert updated record
             await self.vector_store.upsert([record])
 
-            # Build response with changes
+            # Build response with changes (only include actually updated fields)
             changes = []
             for field, after_value in update_data.items():
-                changes.append({
-                    "field": field,
-                    "before": before_state.get(field, ""),
-                    "after": after_value
-                })
+                if field in UPDATABLE_FIELDS:
+                    changes.append({
+                        "field": field,
+                        "before": before_state.get(field, ""),
+                        "after": after_value
+                    })
 
             response = {
                 "success": True,
@@ -173,20 +175,25 @@ class SRMMetadataPlugin:
             record = await self.vector_store.get_by_id(srm_id)
             if not record:
                 return json.dumps({
+                    "success": False,
                     "error": f"SRM {srm_id} not found"
                 })
 
             return json.dumps({
-                "id": record.id,
-                "name": record.name,
-                "category": record.category,
-                "use_case": record.use_case,
-                "owner_notes": record.owner_notes if hasattr(record, 'owner_notes') else "",
-                "hidden_notes": record.hidden_notes if hasattr(record, 'hidden_notes') else ""
+                "success": True,
+                "srm": {
+                    "id": record.id,
+                    "name": record.name,
+                    "category": record.category,
+                    "use_case": record.use_case,
+                    "owner_notes": record.owner_notes,
+                    "hidden_notes": record.hidden_notes
+                }
             }, indent=2)
 
         except Exception as e:
             logger.error(f"Get by ID error: {e}", exc_info=True)
             return json.dumps({
+                "success": False,
                 "error": str(e)
             })
