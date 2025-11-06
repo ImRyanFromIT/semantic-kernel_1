@@ -139,7 +139,7 @@ class SRMMetadataPlugin:
         """
         try:
             results = []
-            async for result in self.vector_store.search(query, top_k=top_k):
+            async for result in await self.vector_store.search(query, top_k=top_k):
                 results.append({
                     "id": result.record.id,
                     "name": result.record.name,

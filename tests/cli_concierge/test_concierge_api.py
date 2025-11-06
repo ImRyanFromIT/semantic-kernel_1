@@ -1,4 +1,4 @@
-"""Tests for maintainer API endpoints."""
+"""Tests for concierge API endpoints."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,9 +11,9 @@ def test_client():
     return TestClient(app)
 
 
-def test_maintainer_stats_endpoint(test_client):
-    """Test /api/maintainer/stats returns system state."""
-    response = test_client.get("/api/maintainer/stats")
+def test_concierge_stats_endpoint(test_client):
+    """Test /api/concierge/stats returns system state."""
+    response = test_client.get("/api/concierge/stats")
 
     assert response.status_code == 200
     data = response.json()

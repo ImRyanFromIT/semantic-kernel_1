@@ -138,36 +138,36 @@ class ChangeRecord(TypedDict):
     after: str
 
 
-class MaintainerSearchRequest(BaseModel):
-    """Request model for maintainer search endpoint."""
+class ConciergeSearchRequest(BaseModel):
+    """Request model for concierge search endpoint."""
     query: str
     top_k: int = 5
 
 
-class MaintainerSearchResponse(BaseModel):
-    """Response model for maintainer search endpoint."""
+class ConciergeSearchResponse(BaseModel):
+    """Response model for concierge search endpoint."""
     results: list[SRMSearchResult]
 
 
-class MaintainerGetRequest(BaseModel):
-    """Request model for maintainer get by ID endpoint."""
+class ConciergeGetRequest(BaseModel):
+    """Request model for concierge get by ID endpoint."""
     srm_id: str
 
 
-class MaintainerGetResponse(BaseModel):
-    """Response model for maintainer get by ID endpoint."""
+class ConciergeGetResponse(BaseModel):
+    """Response model for concierge get by ID endpoint."""
     srm: SRMDetail | None
     error: str | None = None
 
 
-class MaintainerUpdateRequest(BaseModel):
-    """Request model for maintainer update endpoint."""
+class ConciergeUpdateRequest(BaseModel):
+    """Request model for concierge update endpoint."""
     srm_id: str
     updates: dict[str, str]  # Field name -> new value
 
 
-class MaintainerUpdateResponse(BaseModel):
-    """Response model for maintainer update endpoint."""
+class ConciergeUpdateResponse(BaseModel):
+    """Response model for concierge update endpoint."""
     success: bool
     srm_id: str
     srm_name: str | None = None
@@ -242,17 +242,21 @@ async def startup_event():
     )
     print("[+] Feedback system initialized")
 
-    # Initialize maintainer plugin for API endpoints
-    print("[*] Initializing maintainer plugin...")
-    from src.plugins.maintainer.srm_metadata_plugin import SRMMetadataPlugin
-    app.state.maintainer_plugin = SRMMetadataPlugin(
+    # Initialize concierge plugin for API endpoints
+    print("[*] Initializing concierge plugin...")
+    from src.plugins.concierge.srm_metadata_plugin import SRMMetadataPlugin
+    app.state.concierge_plugin = SRMMetadataPlugin(
         vector_store=app.state.vector_store
     )
-    print("[+] Maintainer plugin initialized")
+    print("[+] Concierge plugin initialized")
 
     # Initialize session storage for multi-turn conversations
     app.state.chat_sessions: Dict[str, Dict[str, Any]] = {}
     print("[+] Chat session management initialized")
+
+    # Store server configuration (will be set by main())
+    app.state.server_host = os.getenv('CHATBOT_HOST', '0.0.0.0')
+    app.state.server_port = int(os.getenv('CHATBOT_PORT', '8000'))
 
     # Start background task for session cleanup
     asyncio.create_task(_cleanup_old_sessions())
@@ -629,16 +633,16 @@ async def srm_update_chat_endpoint(request: SrmUpdateChatRequest):
 
 
 # ============================================================================
-# MAINTAINER API ENDPOINTS
+# CONCIERGE API ENDPOINTS
 # ============================================================================
 
-@app.post("/api/maintainer/search", response_model=MaintainerSearchResponse)
-async def maintainer_search_endpoint(request: MaintainerSearchRequest):
+@app.post("/api/concierge/search", response_model=ConciergeSearchResponse)
+async def concierge_search_endpoint(request: ConciergeSearchRequest):
     """
-    Search for SRMs by keywords (maintainer endpoint).
+    Search for SRMs by keywords (concierge endpoint).
 
-    This endpoint is used by the CLI maintainer to search for SRMs.
-    It calls the maintainer plugin which uses the vector store.
+    This endpoint is used by the CLI concierge to search for SRMs.
+    It calls the concierge plugin which uses the vector store.
 
     Args:
         request: Search request with query and top_k
@@ -651,28 +655,28 @@ async def maintainer_search_endpoint(request: MaintainerSearchRequest):
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
     try:
-        # Call maintainer plugin search function
-        result_json = await app.state.maintainer_plugin.search_srm(
+        # Call concierge plugin search function
+        result_json = await app.state.concierge_plugin.search_srm(
             query=request.query,
             top_k=request.top_k
         )
 
         results = json.loads(result_json)
 
-        return MaintainerSearchResponse(results=results)
+        return ConciergeSearchResponse(results=results)
 
     except Exception as e:
-        print(f"[!] Error in maintainer search: {e}")
+        print(f"[!] Error in concierge search: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Search failed: {str(e)}"
         )
 
 
-@app.post("/api/maintainer/get", response_model=MaintainerGetResponse)
-async def maintainer_get_endpoint(request: MaintainerGetRequest):
+@app.post("/api/concierge/get", response_model=ConciergeGetResponse)
+async def concierge_get_endpoint(request: ConciergeGetRequest):
     """
-    Get specific SRM by ID (maintainer endpoint).
+    Get specific SRM by ID (concierge endpoint).
 
     Args:
         request: Get request with srm_id
@@ -685,30 +689,30 @@ async def maintainer_get_endpoint(request: MaintainerGetRequest):
         raise HTTPException(status_code=400, detail="SRM ID cannot be empty")
 
     try:
-        # Call maintainer plugin get function
-        result_json = await app.state.maintainer_plugin.get_srm_by_id(
+        # Call concierge plugin get function
+        result_json = await app.state.concierge_plugin.get_srm_by_id(
             srm_id=request.srm_id
         )
 
         result = json.loads(result_json)
 
         if not result.get("success"):
-            return MaintainerGetResponse(srm=None, error=result.get("error", "Unknown error"))
+            return ConciergeGetResponse(srm=None, error=result.get("error", "Unknown error"))
 
-        return MaintainerGetResponse(srm=result["srm"], error=None)
+        return ConciergeGetResponse(srm=result["srm"], error=None)
 
     except Exception as e:
-        print(f"[!] Error in maintainer get: {e}")
+        print(f"[!] Error in concierge get: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Get failed: {str(e)}"
         )
 
 
-@app.post("/api/maintainer/update", response_model=MaintainerUpdateResponse)
-async def maintainer_update_endpoint(request: MaintainerUpdateRequest):
+@app.post("/api/concierge/update", response_model=ConciergeUpdateResponse)
+async def concierge_update_endpoint(request: ConciergeUpdateRequest):
     """
-    Update SRM metadata (maintainer endpoint).
+    Update SRM metadata (concierge endpoint).
 
     Updates fields like owner_notes, hidden_notes, etc. in the vector store.
 
@@ -728,8 +732,8 @@ async def maintainer_update_endpoint(request: MaintainerUpdateRequest):
         # Convert updates dict to JSON string for plugin
         updates_json = json.dumps(request.updates)
 
-        # Call maintainer plugin update function
-        result_json = await app.state.maintainer_plugin.update_srm_metadata(
+        # Call concierge plugin update function
+        result_json = await app.state.concierge_plugin.update_srm_metadata(
             srm_id=request.srm_id,
             updates=updates_json
         )
@@ -737,13 +741,13 @@ async def maintainer_update_endpoint(request: MaintainerUpdateRequest):
         result = json.loads(result_json)
 
         if not result.get("success"):
-            return MaintainerUpdateResponse(
+            return ConciergeUpdateResponse(
                 success=False,
                 srm_id=request.srm_id,
                 error=result.get("error", "Unknown error")
             )
 
-        return MaintainerUpdateResponse(
+        return ConciergeUpdateResponse(
             success=True,
             srm_id=result["srm_id"],
             srm_name=result.get("srm_name"),
@@ -752,29 +756,29 @@ async def maintainer_update_endpoint(request: MaintainerUpdateRequest):
         )
 
     except Exception as e:
-        print(f"[!] Error in maintainer update: {e}")
+        print(f"[!] Error in concierge update: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Update failed: {str(e)}"
         )
 
 
-@app.get("/api/maintainer/health")
-async def maintainer_health_endpoint():
+@app.get("/api/concierge/health")
+async def concierge_health_endpoint():
     """
-    Health check for maintainer API.
+    Health check for concierge API.
 
-    Verifies that maintainer plugin is initialized and ready.
+    Verifies that concierge plugin is initialized and ready.
     """
     try:
-        has_plugin = hasattr(app.state, 'maintainer_plugin')
+        has_plugin = hasattr(app.state, 'concierge_plugin')
         has_vector_store = hasattr(app.state, 'vector_store')
 
         status = "healthy" if (has_plugin and has_vector_store) else "degraded"
 
         return {
             "status": status,
-            "service": "maintainer-api",
+            "service": "concierge-api",
             "plugin_initialized": has_plugin,
             "vector_store_initialized": has_vector_store,
             "timestamp": datetime.now().isoformat()
@@ -787,38 +791,46 @@ async def maintainer_health_endpoint():
         }
 
 
-@app.get("/api/maintainer/stats")
-async def maintainer_stats_endpoint():
+@app.get("/api/concierge/stats")
+async def concierge_stats_endpoint():
     """
-    Get maintainer system statistics.
+    Get concierge system statistics.
 
     Returns current state information for help command:
     - Total SRM count
     - Temp SRM count (always 0 for now)
     - Chatbot URL
     """
+    # Build chatbot URL from app state configuration
+    host = getattr(app.state, 'server_host', '0.0.0.0')
+    port = getattr(app.state, 'server_port', 8000)
+    # Use localhost for local binding, otherwise use actual host
+    url_host = 'localhost' if host in ('0.0.0.0', '127.0.0.1') else host
+    chatbot_url = f"http://{url_host}:{port}"
+
     try:
         # Count total SRMs in vector store
         # For in-memory store, we need to count records
         total_count = 0
         if hasattr(app.state, 'vector_store'):
-            # Search with empty query to get all records (limited to top 100 for count)
+            # Search with empty query to get all records (limited to top 1000 for count)
+            # Increase limit to 1000 to handle larger SRM datasets
             results = []
-            async for result in await app.state.vector_store.search("", top_k=100):
+            async for result in await app.state.vector_store.search("", top_k=1000):
                 results.append(result)
             total_count = len(results)
 
         return {
             "total_srms": total_count,
             "temp_srms": 0,  # Phase 3 will implement this
-            "chatbot_url": "http://localhost:8000",
+            "chatbot_url": chatbot_url,
             "status": "healthy"
         }
     except Exception as e:
         return {
             "total_srms": 0,
             "temp_srms": 0,
-            "chatbot_url": "http://localhost:8000",
+            "chatbot_url": chatbot_url,
             "status": "error",
             "error": str(e)
         }

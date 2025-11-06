@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from src.plugins.maintainer.srm_metadata_plugin import SRMMetadataPlugin
+from src.plugins.concierge.srm_metadata_plugin import SRMMetadataPlugin
 from src.models.srm_record import SRMRecord
 
 

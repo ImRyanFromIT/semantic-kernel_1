@@ -4,14 +4,14 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
 
-from src.plugins.cli_maintainer.api_client_plugin import MaintainerAPIClientPlugin
+from src.plugins.cli_concierge.api_client_plugin import ConciergeAPIClientPlugin
 
 
 @pytest.mark.asyncio
 async def test_search_srm_calls_api():
     """Test search_srm makes HTTP call to chatbot API."""
     # Arrange
-    plugin = MaintainerAPIClientPlugin(base_url="http://localhost:8000")
+    plugin = ConciergeAPIClientPlugin(base_url="http://localhost:8000")
 
     # Use MagicMock for response (httpx response.json() is sync)
     mock_response = MagicMock()
@@ -35,7 +35,7 @@ async def test_search_srm_calls_api():
 async def test_update_srm_metadata_calls_api():
     """Test update_srm_metadata makes HTTP call to chatbot API."""
     # Arrange
-    plugin = MaintainerAPIClientPlugin(base_url="http://localhost:8000")
+    plugin = ConciergeAPIClientPlugin(base_url="http://localhost:8000")
 
     # Use MagicMock for response (httpx response.json() is sync)
     mock_response = MagicMock()

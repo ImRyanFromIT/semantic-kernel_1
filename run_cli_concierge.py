@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CLI Maintainer Agent
+CLI Concierge Agent
 
 Interactive REPL agent for managing SRM metadata.
 Uses Semantic Kernel with auto function calling to make API requests to chatbot service.
@@ -22,7 +22,7 @@ from semantic_kernel.contents.utils.author_role import AuthorRole
 from semantic_kernel.connectors.ai.function_choice_behavior import FunctionChoiceBehavior
 
 from src.utils.kernel_builder import create_kernel
-from src.plugins.cli_maintainer.api_client_plugin import MaintainerAPIClientPlugin
+from src.plugins.cli_concierge.api_client_plugin import ConciergeAPIClientPlugin
 
 
 # Configure logging
@@ -31,7 +31,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('logs/cli_maintainer.log', mode='a')
+        logging.FileHandler('logs/cli_concierge.log', mode='a')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -40,12 +40,12 @@ logger = logging.getLogger(__name__)
 logging.getLogger('semantic_kernel').setLevel(logging.WARNING)
 
 
-class CLIMaintainerAgent:
-    """CLI-based maintainer agent for SRM metadata management."""
+class CLIConciergeAgent:
+    """CLI-based concierge agent for SRM metadata management."""
 
     def __init__(self, chatbot_url: str = "http://localhost:8000", debug: bool = False):
         """
-        Initialize CLI maintainer agent.
+        Initialize CLI concierge agent.
 
         Args:
             chatbot_url: URL of chatbot service (hardcoded for demo)
@@ -65,6 +65,20 @@ class CLIMaintainerAgent:
             True if successful, False otherwise
         """
         try:
+<<<<<<< HEAD:run_cli_maintainer.py
+=======
+            print("\n" + r"""
+  _____ _____  __  __    _____                _
+ / ____|  __ \|  \/  |  / ____|              (_)
+| (___ | |__) | \  / | | |     ___  _ __   ___ _  ___ _ __ __ _  ___
+ \___ \|  _  /| |\/| | | |    / _ \| '_ \ / __| |/ _ \ '__/ _` |/ _ \
+ ____) | | \ \| |  | | | |___| (_) | | | | (__| |  __/ | | (_| |  __/
+|_____/|_|  \_\_|  |_|  \_____\___/|_| |_|\___|_|\___|_|  \__, |\___|
+                                                            __/ |
+                 ~* AI At Your Service *~                  |___/
+""")
+
+>>>>>>> ba13b90 (refactor: rebrand CLI Maintainer to SRM Concierge):run_cli_concierge.py
             # Create kernel
             print("[*] Initializing Semantic Kernel...")
             self.kernel = create_kernel()
@@ -72,23 +86,24 @@ class CLIMaintainerAgent:
 
             # Add API client plugin
             print(f"[*] Connecting to chatbot service at {self.chatbot_url}...")
-            api_client = MaintainerAPIClientPlugin(base_url=self.chatbot_url)
+            api_client = ConciergeAPIClientPlugin(base_url=self.chatbot_url)
             self.kernel.add_plugin(api_client, plugin_name="api_client")
             print("[+] API client plugin loaded")
 
-            # Create agent with auto function calling
-            print("[*] Creating maintainer agent...")
+            # Create agent
+            print("[*] Creating concierge agent...")
             self.agent = ChatCompletionAgent(
                 kernel=self.kernel,
-                name="MaintainerAgent",
-                instructions="""You are an SRM metadata maintainer assistant.
+                name="ConciergeAgent",
+                instructions="""You are an SRM Concierge - a helpful AI assistant for Service Request Management.
 
-Your role is to help users update SRM (Service Request Model) metadata like owner notes.
+Your role is to help users manage SRM (Service Request Model) metadata like owner notes.
 
 CAPABILITIES:
 - Search for SRMs by keywords or name
 - View detailed SRM information
 - Update owner notes and hidden notes for SRMs
+<<<<<<< HEAD:run_cli_maintainer.py
 - Display help information with current system state
 
 HELP COMMAND:
@@ -135,6 +150,8 @@ OTHER:
   'quit' - Exit
 
 Type any natural language request and I'll figure out what you need!
+=======
+>>>>>>> ba13b90 (refactor: rebrand CLI Maintainer to SRM Concierge):run_cli_concierge.py
 
 EXAMPLE INTERACTIONS:
 User: "show storage SRMs"
@@ -146,8 +163,11 @@ You: [Search for "AI" and display matching SRMs in table format]
 User: "show me SRM-001"
 You: [Display full details including current notes]
 
-User: "update SRM-036 owner notes to say 'Contact storage team before provisioning'"
+User: "update SRM-036 owner_notes to Contact storage team before provisioning"
 You: [Get SRM-036, show current owner_notes, ask for confirmation, then update]
+
+User: "add hidden notes to SRM-036 saying 'Known issue with Dell arrays'"
+You: [Get SRM-036, show current hidden_notes, ask for confirmation, then update]
 
 KEY BEHAVIORS:
 1. When user mentions an SRM by name, use search_srm to find the ID
@@ -162,7 +182,7 @@ FORMATTING RULES:
    | SRM-XXX | ... | ... | ... |
 6. Keep use case summaries to 1-2 sentences max
 
-Be conversational but concise. Always confirm before making changes.""",
+Be conversational, friendly, and helpful. Always confirm before making changes.""",
                 function_choice_behavior=FunctionChoiceBehavior.Auto()
             )
             print("[+] Agent created with auto function calling enabled")
@@ -176,7 +196,7 @@ Be conversational but concise. Always confirm before making changes.""",
   _____ _____  __  __    _____                _
  / ____|  __ \|  \/  |  / ____|              (_)
 | (___ | |__) | \  / | | |     ___  _ __   ___ _  ___ _ __ __ _  ___
- \___ \|  _  /| |\/| | | |    / _ \| '_ \ / __| |/ _ \ '__/ _` |/ _ \
+ \___ \|  _  /| |\/| | | |    / _ \| '_ \ / __| |/ _ \ '__/ _\ |/ _ \
  ____) | | \ \| |  | | | |___| (_) | | | | (__| |  __/ | | (_| |  __/
 |_____/|_|  \_\_|  |_|  \_____\___/|_| |_|\___|_|\___|_|  \__, |\___|
                                                             __/ |
@@ -202,7 +222,7 @@ Be conversational but concise. Always confirm before making changes.""",
 
     async def run_repl(self):
         """Run the interactive REPL loop."""
-        print("\nCLI Maintainer> ", end='', flush=True)
+        print("\nConcierge> ", end='', flush=True)
 
         while True:
             try:
@@ -213,12 +233,12 @@ Be conversational but concise. Always confirm before making changes.""",
                 user_input = user_input.strip()
 
                 if not user_input:
-                    print("\nCLI Maintainer> ", end='', flush=True)
+                    print("\nConcierge> ", end='', flush=True)
                     continue
 
                 # Check for quit
                 if user_input.lower() in ['quit', 'exit', 'q']:
-                    print("\nGoodbye!")
+                    print("\nThank you for using SRM Concierge. Goodbye!")
                     break
 
                 # Add user message to history
@@ -269,24 +289,35 @@ Be conversational but concise. Always confirm before making changes.""",
                         print(response.content, end='', flush=True)
 
                 print()  # Newline after response
-                print("\nCLI Maintainer> ", end='', flush=True)
+                print("\nConcierge> ", end='', flush=True)
 
             except KeyboardInterrupt:
                 print("\n\nInterrupted. Type 'quit' to exit.")
-                print("\nCLI Maintainer> ", end='', flush=True)
+                print("\nConcierge> ", end='', flush=True)
             except Exception as e:
                 logger.error(f"Error in REPL: {e}", exc_info=True)
                 print(f"\n[ERROR] {e}")
-                print("\nCLI Maintainer> ", end='', flush=True)
+                print("\nConcierge> ", end='', flush=True)
 
 
 async def main():
     """Main entry point."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="CLI Concierge Agent for SRM metadata management"
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug output for function calls"
+    )
+    args = parser.parse_args()
+
     # Create logs directory
     Path("logs").mkdir(exist_ok=True)
 
-    # Initialize and run agent
-    agent = CLIMaintainerAgent()
+    # Initialize and run agent with debug flag
+    agent = CLIConciergeAgent(debug=args.debug)
 
     if not await agent.initialize():
         print("[!] Failed to initialize. Exiting.")
