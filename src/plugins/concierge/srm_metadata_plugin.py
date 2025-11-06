@@ -197,3 +197,87 @@ class SRMMetadataPlugin:
                 "success": False,
                 "error": str(e)
             })
+
+    @kernel_function(
+        description="Update multiple SRMs matching filter criteria",
+        name="batch_update_srms"
+    )
+    async def batch_update_srms(
+        self,
+        filter_json: Annotated[str, "JSON filter criteria (e.g., '{\"team\": \"Database Services Team\"}')"],
+        updates: Annotated[str, "JSON string of field updates"]
+    ) -> Annotated[str, "JSON response with updated count and IDs"]:
+        """
+        Batch update SRMs matching filter.
+
+        Args:
+            filter_json: JSON filter criteria
+            updates: JSON field updates
+
+        Returns:
+            JSON with results
+        """
+        try:
+            # Parse inputs
+            filter_data = json.loads(filter_json)
+            update_data = json.loads(updates)
+
+            # Get all SRMs (search with broad query)
+            all_results = []
+            async for result in await self.vector_store.search("", top_k=200):
+                all_results.append(result.record)
+
+            # Filter records
+            matching_records = []
+            for record in all_results:
+                matches = True
+                if "team" in filter_data:
+                    if record.owning_team != filter_data["team"]:
+                        matches = False
+                if "type" in filter_data:
+                    if record.category != filter_data["type"]:
+                        matches = False
+
+                if matches:
+                    matching_records.append(record)
+
+            # Update records (max 20 for safety)
+            MAX_BATCH_SIZE = 20
+            if len(matching_records) > MAX_BATCH_SIZE:
+                return json.dumps({
+                    "success": False,
+                    "error": f"Too many matches ({len(matching_records)}). Max batch size is {MAX_BATCH_SIZE}."
+                })
+
+            # Apply updates
+            UPDATABLE_FIELDS = {"owner_notes", "hidden_notes"}
+            updated_ids = []
+            failures = []
+
+            for record in matching_records:
+                try:
+                    for field, value in update_data.items():
+                        if field in UPDATABLE_FIELDS:
+                            setattr(record, field, value)
+
+                    await self.vector_store.upsert([record])
+                    updated_ids.append(record.id)
+                except Exception as e:
+                    failures.append({
+                        "srm_id": record.id,
+                        "error": str(e)
+                    })
+
+            return json.dumps({
+                "success": True,
+                "updated_count": len(updated_ids),
+                "updated_ids": updated_ids,
+                "failures": failures
+            }, indent=2)
+
+        except Exception as e:
+            logger.error(f"Batch update error: {e}", exc_info=True)
+            return json.dumps({
+                "success": False,
+                "error": str(e)
+            })

@@ -175,6 +175,21 @@ class ConciergeUpdateResponse(BaseModel):
     error: str | None = None
 
 
+class ConciergeBatchUpdateRequest(BaseModel):
+    """Request model for concierge batch update endpoint."""
+    filter: dict[str, str]  # Filter criteria (team, type, technology)
+    updates: dict[str, str]  # Field name -> new value
+
+
+class ConciergeBatchUpdateResponse(BaseModel):
+    """Response model for concierge batch update endpoint."""
+    success: bool
+    updated_count: int
+    updated_ids: list[str]
+    failures: list[dict[str, str]] = []  # List of {srm_id, error}
+    error: str | None = None
+
+
 # ============================================================================
 # STARTUP
 # ============================================================================
@@ -760,6 +775,58 @@ async def concierge_update_endpoint(request: ConciergeUpdateRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Update failed: {str(e)}"
+        )
+
+
+@app.post("/api/concierge/batch/update", response_model=ConciergeBatchUpdateResponse)
+async def concierge_batch_update_endpoint(request: ConciergeBatchUpdateRequest):
+    """
+    Batch update SRMs matching filter criteria.
+
+    Supports filtering by:
+    - team: Exact match on owning_team
+    - type: Exact match on category
+
+    Max 20 SRMs per batch for safety.
+    """
+    if not request.filter:
+        raise HTTPException(status_code=400, detail="Filter cannot be empty")
+    if not request.updates:
+        raise HTTPException(status_code=400, detail="Updates cannot be empty")
+
+    try:
+        # Convert to JSON strings for plugin
+        filter_json = json.dumps(request.filter)
+        updates_json = json.dumps(request.updates)
+
+        # Call concierge plugin batch update
+        result_json = await app.state.concierge_plugin.batch_update_srms(
+            filter_json=filter_json,
+            updates=updates_json
+        )
+
+        result = json.loads(result_json)
+
+        if not result.get("success"):
+            return ConciergeBatchUpdateResponse(
+                success=False,
+                updated_count=0,
+                updated_ids=[],
+                error=result.get("error", "Unknown error")
+            )
+
+        return ConciergeBatchUpdateResponse(
+            success=True,
+            updated_count=result["updated_count"],
+            updated_ids=result["updated_ids"],
+            failures=result.get("failures", [])
+        )
+
+    except Exception as e:
+        print(f"[!] Error in batch update: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Batch update failed: {str(e)}"
         )
 
 

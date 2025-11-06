@@ -254,3 +254,65 @@ class ConciergeAPIClientPlugin:
         except Exception as e:
             logger.error(f"Stats API call failed: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
+
+    @kernel_function(
+        description=(
+            "Batch update multiple SRMs matching filter criteria. "
+            "Supports filtering by team, type. Max 20 SRMs per batch. "
+            "IMPORTANT: ALWAYS get confirmation from user before calling this. "
+            "Show user which SRMs will be updated and ask for explicit 'yes'."
+        ),
+        name="batch_update_srms"
+    )
+    async def batch_update_srms(
+        self,
+        filter_json: Annotated[str, "JSON filter criteria (e.g., '{\"team\": \"Database Services Team\"}')"],
+        updates_json: Annotated[str, "JSON string of field updates"]
+    ) -> Annotated[str, "JSON response with updated count and IDs"]:
+        """
+        Batch update SRMs matching filter.
+
+        Args:
+            filter_json: JSON filter criteria
+            updates_json: JSON field updates
+
+        Returns:
+            JSON string with batch update results
+        """
+        try:
+            # Parse to validate JSON
+            filter_data = json.loads(filter_json)
+            updates_data = json.loads(updates_json)
+
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/concierge/batch/update",
+                    json={
+                        "filter": filter_data,
+                        "updates": updates_data
+                    }
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"Batch update: {data.get('updated_count')} SRMs updated")
+                    return json.dumps(data, indent=2)
+                else:
+                    error_msg = f"Batch update API returned status {response.status_code}"
+                    logger.error(error_msg)
+                    return json.dumps({
+                        "success": False,
+                        "error": error_msg
+                    })
+
+        except json.JSONDecodeError as e:
+            return json.dumps({
+                "success": False,
+                "error": f"Invalid JSON: {e}"
+            })
+        except Exception as e:
+            logger.error(f"Batch update API call failed: {e}", exc_info=True)
+            return json.dumps({
+                "success": False,
+                "error": str(e)
+            })

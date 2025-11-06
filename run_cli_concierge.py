@@ -136,9 +136,22 @@ UPDATE:
   'update SRM-036 owner notes to Contact storage team first'
   'add hidden notes to SRM-036 saying Known issue with Dell arrays'
 
-BATCH OPERATIONS (Coming Soon):
+BATCH OPERATIONS:
   'add owner notes to all Database Services SRMs saying Contact DBA first'
   'update all Consultation SRMs hidden notes to Requires design review'
+  'update SRM-001 through SRM-010 owner notes to Legacy systems'
+
+BATCH OPERATION WORKFLOW:
+When user requests a batch update:
+1. Parse the filter criteria (team, type, ID range)
+2. Use search_srm to find matching SRMs
+3. Display the list of SRMs that will be updated
+4. Show the exact update that will be applied
+5. Ask "Confirm? (yes/no)"
+6. If user confirms with "yes", call batch_update_srms
+7. Display results showing which SRMs were updated
+
+IMPORTANT: Never call batch_update_srms without explicit user confirmation.
 
 TEMP SRMS (Coming Soon):
   'add temp SRM for cloud cost optimization by FinOps team'
@@ -283,6 +296,8 @@ Be conversational, friendly, and helpful. Always confirm before making changes."
                                             print("[*] Updating...", flush=True)
                                         elif func_name == "get_stats":
                                             print("[*] Getting stats...", flush=True)
+                                        elif func_name == "batch_update_srms":
+                                            print("[*] Batch updating...", flush=True)
 
                     # Print the actual response content
                     if response.content:

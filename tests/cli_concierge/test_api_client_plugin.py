@@ -84,3 +84,31 @@ async def test_get_stats_calls_api():
     data = json.loads(result)
     assert data["total_srms"] == 56
     assert data["temp_srms"] == 2
+
+
+@pytest.mark.asyncio
+async def test_batch_update_srms_calls_api():
+    """Test batch_update_srms makes HTTP call to chatbot API."""
+    # Arrange
+    plugin = ConciergeAPIClientPlugin(base_url="http://localhost:8000")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "success": True,
+        "updated_count": 5,
+        "updated_ids": ["SRM-011", "SRM-012", "SRM-013", "SRM-014", "SRM-015"],
+        "failures": []
+    }
+
+    # Act
+    with patch('httpx.AsyncClient.post', new_callable=AsyncMock, return_value=mock_response):
+        result = await plugin.batch_update_srms(
+            filter_json='{"team": "Database Services Team"}',
+            updates_json='{"owner_notes": "Contact DBA first"}'
+        )
+
+    # Assert
+    assert "SRM-011" in result
+    data = json.loads(result)
+    assert data["updated_count"] == 5
