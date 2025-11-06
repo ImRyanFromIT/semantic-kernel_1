@@ -80,7 +80,6 @@ class CLIMaintainerAgent:
             # Create agent with auto function calling
             print("[*] Creating maintainer agent...")
             self.agent = ChatCompletionAgent(
-                service_id="chat",
                 kernel=self.kernel,
                 name="MaintainerAgent",
                 instructions="""You are an SRM metadata maintainer assistant.
@@ -94,9 +93,7 @@ Key behaviors:
 4. After updating, show the before/after changes clearly
 
 Be conversational but concise. Always confirm before making changes.""",
-                execution_settings={
-                    "function_choice_behavior": FunctionChoiceBehavior.Auto()
-                }
+                function_choice_behavior=FunctionChoiceBehavior.Auto()
             )
             print("[+] Agent created with auto function calling enabled")
 
