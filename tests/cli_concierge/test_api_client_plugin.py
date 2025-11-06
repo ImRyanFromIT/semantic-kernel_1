@@ -112,3 +112,65 @@ async def test_batch_update_srms_calls_api():
     assert "SRM-011" in result
     data = json.loads(result)
     assert data["updated_count"] == 5
+
+
+@pytest.mark.asyncio
+async def test_create_temp_srm_calls_api():
+    """Test create_temp_srm makes HTTP call to chatbot API."""
+    plugin = ConciergeAPIClientPlugin(base_url="http://localhost:8000")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "success": True,
+        "srm_id": "SRM-TEMP-001",
+        "srm": {
+            "id": "SRM-TEMP-001",
+            "name": "Cloud Cost Optimization",
+            "category": "Consultation"
+        }
+    }
+
+    with patch('httpx.AsyncClient.post', new_callable=AsyncMock, return_value=mock_response):
+        result = await plugin.create_temp_srm(
+            srm_data_json='{"name": "Cloud Cost Optimization", "category": "Consultation", "owning_team": "FinOps", "use_case": "Test"}'
+        )
+
+    assert "SRM-TEMP-001" in result
+    data = json.loads(result)
+    assert data["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_list_temp_srms_calls_api():
+    """Test list_temp_srms makes HTTP call to chatbot API."""
+    plugin = ConciergeAPIClientPlugin(base_url="http://localhost:8000")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "temp_srms": [
+            {"id": "SRM-TEMP-001", "name": "Test SRM"}
+        ]
+    }
+
+    with patch('httpx.AsyncClient.get', new_callable=AsyncMock, return_value=mock_response):
+        result = await plugin.list_temp_srms()
+
+    assert "SRM-TEMP-001" in result
+
+
+@pytest.mark.asyncio
+async def test_delete_temp_srm_calls_api():
+    """Test delete_temp_srm makes HTTP call to chatbot API."""
+    plugin = ConciergeAPIClientPlugin(base_url="http://localhost:8000")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"success": True}
+
+    with patch('httpx.AsyncClient.post', new_callable=AsyncMock, return_value=mock_response):
+        result = await plugin.delete_temp_srm(srm_id="SRM-TEMP-001")
+
+    data = json.loads(result)
+    assert data["success"] is True

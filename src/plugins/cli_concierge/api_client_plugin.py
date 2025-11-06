@@ -316,3 +316,91 @@ class ConciergeAPIClientPlugin:
                 "success": False,
                 "error": str(e)
             })
+
+    @kernel_function(
+        description=(
+            "Create temporary SRM (not persisted to CSV). "
+            "Use this for testing or temporary additions. "
+            "Requires: name, category, owning_team, use_case"
+        ),
+        name="create_temp_srm"
+    )
+    async def create_temp_srm(
+        self,
+        srm_data_json: Annotated[str, "JSON with SRM fields (name, category, owning_team, use_case)"]
+    ) -> Annotated[str, "JSON response with temp SRM ID and details"]:
+        """Create temporary SRM via chatbot API."""
+        try:
+            srm_data = json.loads(srm_data_json)
+
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/concierge/temp/create",
+                    json=srm_data
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"Created temp SRM: {data.get('srm_id')}")
+                    return json.dumps(data, indent=2)
+                else:
+                    error_msg = f"Temp create API returned status {response.status_code}"
+                    logger.error(error_msg)
+                    return json.dumps({"success": False, "error": error_msg})
+
+        except Exception as e:
+            logger.error(f"Temp create API call failed: {e}", exc_info=True)
+            return json.dumps({"success": False, "error": str(e)})
+
+    @kernel_function(
+        description="List all temporary SRMs",
+        name="list_temp_srms"
+    )
+    async def list_temp_srms(self) -> Annotated[str, "JSON array of temp SRMs"]:
+        """List temporary SRMs via chatbot API."""
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/api/concierge/temp/list"
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    return json.dumps(data, indent=2)
+                else:
+                    error_msg = f"Temp list API returned status {response.status_code}"
+                    logger.error(error_msg)
+                    return json.dumps({"temp_srms": []})
+
+        except Exception as e:
+            logger.error(f"Temp list API call failed: {e}", exc_info=True)
+            return json.dumps({"temp_srms": []})
+
+    @kernel_function(
+        description="Delete temporary SRM by ID",
+        name="delete_temp_srm"
+    )
+    async def delete_temp_srm(
+        self,
+        srm_id: Annotated[str, "Temp SRM ID to delete (e.g., 'SRM-TEMP-001')"]
+    ) -> Annotated[str, "JSON response with success status"]:
+        """Delete temporary SRM via chatbot API."""
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/concierge/temp/delete",
+                    json={"srm_id": srm_id}
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"Deleted temp SRM: {srm_id}")
+                    return json.dumps(data, indent=2)
+                else:
+                    error_msg = f"Temp delete API returned status {response.status_code}"
+                    logger.error(error_msg)
+                    return json.dumps({"success": False, "error": error_msg})
+
+        except Exception as e:
+            logger.error(f"Temp delete API call failed: {e}", exc_info=True)
+            return json.dumps({"success": False, "error": str(e)})

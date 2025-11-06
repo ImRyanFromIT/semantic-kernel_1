@@ -190,6 +190,38 @@ class ConciergeBatchUpdateResponse(BaseModel):
     error: str | None = None
 
 
+class TempSRMCreateRequest(BaseModel):
+    """Request model for temp SRM creation."""
+    name: str
+    category: str
+    owning_team: str
+    use_case: str
+
+
+class TempSRMCreateResponse(BaseModel):
+    """Response model for temp SRM creation."""
+    success: bool
+    srm_id: str | None = None
+    srm: dict | None = None
+    error: str | None = None
+
+
+class TempSRMListResponse(BaseModel):
+    """Response model for listing temp SRMs."""
+    temp_srms: list[dict]
+
+
+class TempSRMDeleteRequest(BaseModel):
+    """Request model for deleting temp SRM."""
+    srm_id: str
+
+
+class TempSRMDeleteResponse(BaseModel):
+    """Response model for deleting temp SRM."""
+    success: bool
+    error: str | None = None
+
+
 # ============================================================================
 # STARTUP
 # ============================================================================
@@ -268,6 +300,11 @@ async def startup_event():
     # Initialize session storage for multi-turn conversations
     app.state.chat_sessions: Dict[str, Dict[str, Any]] = {}
     print("[+] Chat session management initialized")
+
+    # Initialize temp SRM storage
+    app.state.temp_srms: Dict[str, Any] = {}  # Maps SRM-TEMP-XXX to SRMRecord
+    app.state.temp_id_counter: int = 1
+    print("[+] Temp SRM storage initialized")
 
     # Store server configuration (will be set by main())
     app.state.server_host = os.getenv('CHATBOT_HOST', '0.0.0.0')
@@ -887,9 +924,12 @@ async def concierge_stats_endpoint():
                 results.append(result)
             total_count = len(results)
 
+        # Count temp SRMs
+        temp_count = len(app.state.temp_srms) if hasattr(app.state, 'temp_srms') else 0
+
         return {
             "total_srms": total_count,
-            "temp_srms": 0,  # Phase 3 will implement this
+            "temp_srms": temp_count,
             "chatbot_url": chatbot_url,
             "status": "healthy"
         }
@@ -901,6 +941,114 @@ async def concierge_stats_endpoint():
             "status": "error",
             "error": str(e)
         }
+
+
+@app.post("/api/concierge/temp/create", response_model=TempSRMCreateResponse)
+async def temp_srm_create_endpoint(request: TempSRMCreateRequest):
+    """
+    Create temporary SRM (session-scoped, not persisted).
+
+    Temp SRMs:
+    - Get IDs like SRM-TEMP-001, SRM-TEMP-002, etc.
+    - Stored in app.state.temp_srms (in-memory)
+    - Appear in search results with [TEMP] marker
+    - Lost on restart
+    """
+    try:
+        # Generate temp ID
+        temp_id = f"SRM-TEMP-{app.state.temp_id_counter:03d}"
+        app.state.temp_id_counter += 1
+
+        # Create SRMRecord
+        from src.models.srm_record import SRMRecord
+
+        temp_srm = SRMRecord(
+            id=temp_id,
+            name=request.name,
+            category=request.category,
+            owning_team=request.owning_team,
+            use_case=request.use_case,
+            text=f"{request.name} {request.category} {request.use_case} {request.owning_team}",
+            owner_notes="[TEMP SRM - Not persisted to CSV]",
+            hidden_notes=""
+        )
+
+        # Store in temp storage
+        app.state.temp_srms[temp_id] = temp_srm
+
+        # Also add to vector store for search (in-memory only)
+        await app.state.vector_store.upsert([temp_srm])
+
+        logger.info(f"Created temp SRM: {temp_id} - {request.name}")
+
+        return TempSRMCreateResponse(
+            success=True,
+            srm_id=temp_id,
+            srm={
+                "id": temp_id,
+                "name": request.name,
+                "category": request.category,
+                "owning_team": request.owning_team,
+                "use_case": request.use_case,
+                "owner_notes": temp_srm.owner_notes
+            }
+        )
+
+    except Exception as e:
+        print(f"[!] Error creating temp SRM: {e}")
+        return TempSRMCreateResponse(
+            success=False,
+            error=str(e)
+        )
+
+
+@app.get("/api/concierge/temp/list", response_model=TempSRMListResponse)
+async def temp_srm_list_endpoint():
+    """List all temporary SRMs."""
+    try:
+        temp_list = []
+        for srm_id, srm in app.state.temp_srms.items():
+            temp_list.append({
+                "id": srm.id,
+                "name": srm.name,
+                "category": srm.category,
+                "owning_team": srm.owning_team,
+                "use_case": srm.use_case
+            })
+
+        return TempSRMListResponse(temp_srms=temp_list)
+
+    except Exception as e:
+        print(f"[!] Error listing temp SRMs: {e}")
+        return TempSRMListResponse(temp_srms=[])
+
+
+@app.post("/api/concierge/temp/delete", response_model=TempSRMDeleteResponse)
+async def temp_srm_delete_endpoint(request: TempSRMDeleteRequest):
+    """Delete temporary SRM."""
+    try:
+        if request.srm_id not in app.state.temp_srms:
+            return TempSRMDeleteResponse(
+                success=False,
+                error=f"Temp SRM {request.srm_id} not found"
+            )
+
+        # Remove from temp storage
+        del app.state.temp_srms[request.srm_id]
+
+        # Note: Can't easily remove from vector store in SK
+        # It will be gone on restart anyway
+
+        logger.info(f"Deleted temp SRM: {request.srm_id}")
+
+        return TempSRMDeleteResponse(success=True)
+
+    except Exception as e:
+        print(f"[!] Error deleting temp SRM: {e}")
+        return TempSRMDeleteResponse(
+            success=False,
+            error=str(e)
+        )
 
 
 @app.get("/health")

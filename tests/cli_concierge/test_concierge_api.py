@@ -58,3 +58,23 @@ def test_batch_update_endpoint(test_client, mock_concierge_plugin):
     assert "updated_count" in data
     assert "updated_ids" in data
     assert isinstance(data["updated_ids"], list)
+
+
+def test_temp_srm_create_endpoint(test_client):
+    """Test /api/concierge/temp/create creates temp SRM."""
+    response = test_client.post(
+        "/api/concierge/temp/create",
+        json={
+            "name": "Cloud Cost Optimization",
+            "category": "Consultation",
+            "owning_team": "FinOps Team",
+            "use_case": "Analyze AWS and Azure spending to identify savings opportunities"
+        }
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "srm_id" in data
+    assert data["srm_id"].startswith("SRM-TEMP-")
+    assert "srm" in data

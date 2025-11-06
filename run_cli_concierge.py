@@ -153,10 +153,28 @@ When user requests a batch update:
 
 IMPORTANT: Never call batch_update_srms without explicit user confirmation.
 
-TEMP SRMS (Coming Soon):
+TEMP SRMS:
   'add temp SRM for cloud cost optimization by FinOps team'
   'list temp SRMs' - Show all temporary SRMs
   'delete temp SRM-TEMP-001'
+
+TEMP SRM WORKFLOW:
+When user wants to add a temp SRM:
+1. Extract SRM details from natural language:
+   - name: Main title
+   - category: Services, Consultation, or Support
+   - owning_team: Team name (can be new team)
+   - use_case: What the SRM does
+2. If any required fields are missing, ask clarifying questions
+3. Show the extracted details to user for confirmation
+4. Call create_temp_srm with JSON data
+5. Display success message with temp SRM ID
+
+Temp SRMs:
+- Get IDs like SRM-TEMP-001, SRM-TEMP-002
+- Appear in searches with [TEMP] marker
+- Lost on restart (not persisted to CSV)
+- Useful for testing before adding to real index
 
 OTHER:
   'help' - Show this message
@@ -194,6 +212,8 @@ FORMATTING RULES:
    |--------|------|----------|------------------|
    | SRM-XXX | ... | ... | ... |
 6. Keep use case summaries to 1-2 sentences max
+7. Mark temp SRMs in search results with [TEMP] prefix:
+   | [TEMP] SRM-TEMP-001 | Test SRM | ... |
 
 Be conversational, friendly, and helpful. Always confirm before making changes.""",
                 function_choice_behavior=FunctionChoiceBehavior.Auto()
@@ -298,6 +318,12 @@ Be conversational, friendly, and helpful. Always confirm before making changes."
                                             print("[*] Getting stats...", flush=True)
                                         elif func_name == "batch_update_srms":
                                             print("[*] Batch updating...", flush=True)
+                                        elif func_name == "create_temp_srm":
+                                            print("[*] Creating temp SRM...", flush=True)
+                                        elif func_name == "list_temp_srms":
+                                            print("[*] Listing temp SRMs...", flush=True)
+                                        elif func_name == "delete_temp_srm":
+                                            print("[*] Deleting temp SRM...", flush=True)
 
                     # Print the actual response content
                     if response.content:

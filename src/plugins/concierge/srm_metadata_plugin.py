@@ -281,3 +281,30 @@ class SRMMetadataPlugin:
                 "success": False,
                 "error": str(e)
             })
+
+    @kernel_function(
+        description="Create temporary SRM (not persisted to CSV, session-scoped)",
+        name="create_temp_srm"
+    )
+    async def create_temp_srm(
+        self,
+        srm_data_json: Annotated[str, "JSON with name, category, owning_team, use_case"]
+    ) -> Annotated[str, "JSON response with temp SRM ID and details"]:
+        """
+        Create temporary SRM in memory.
+
+        NOTE: This requires access to app.state which is only available
+        in the chatbot context. This function will be called via API.
+
+        Args:
+            srm_data_json: JSON with SRM fields
+
+        Returns:
+            JSON with created SRM
+        """
+        # This is a placeholder - actual implementation is in the API endpoint
+        # since it needs access to app.state.temp_srms
+        return json.dumps({
+            "success": False,
+            "error": "create_temp_srm must be called via API endpoint"
+        })
