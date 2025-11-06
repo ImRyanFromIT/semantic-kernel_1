@@ -6,10 +6,11 @@ from unittest.mock import AsyncMock
 from run_chatbot import app
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def test_client():
-    """Create test client."""
-    return TestClient(app)
+    """Create test client with startup/shutdown lifecycle."""
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture

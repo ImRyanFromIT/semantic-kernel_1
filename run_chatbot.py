@@ -979,7 +979,7 @@ async def temp_srm_create_endpoint(request: TempSRMCreateRequest):
         # Also add to vector store for search (in-memory only)
         await app.state.vector_store.upsert([temp_srm])
 
-        logger.info(f"Created temp SRM: {temp_id} - {request.name}")
+        print(f"[+] Created temp SRM: {temp_id} - {request.name}")
 
         return TempSRMCreateResponse(
             success=True,
@@ -1039,7 +1039,7 @@ async def temp_srm_delete_endpoint(request: TempSRMDeleteRequest):
         # Note: Can't easily remove from vector store in SK
         # It will be gone on restart anyway
 
-        logger.info(f"Deleted temp SRM: {request.srm_id}")
+        print(f"[+] Deleted temp SRM: {request.srm_id}")
 
         return TempSRMDeleteResponse(success=True)
 

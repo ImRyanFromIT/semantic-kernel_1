@@ -1,17 +1,17 @@
-"""Integration tests for CLI maintainer."""
+"""Integration tests for CLI concierge."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
 
-from run_cli_maintainer import CLIMaintainerAgent
+from run_cli_concierge import CLIConciergeAgent
 
 
 @pytest.mark.asyncio
 async def test_cli_agent_initialization():
     """Test CLI agent can initialize."""
     # Arrange
-    agent = CLIMaintainerAgent(chatbot_url="http://localhost:8000")
+    agent = CLIConciergeAgent(chatbot_url="http://localhost:8000")
 
     # Act
     success = await agent.initialize()
@@ -27,7 +27,7 @@ async def test_cli_agent_initialization():
 async def test_cli_agent_can_search_via_plugin():
     """Test CLI agent can call search function through plugin."""
     # Arrange
-    agent = CLIMaintainerAgent(chatbot_url="http://localhost:8000")
+    agent = CLIConciergeAgent(chatbot_url="http://localhost:8000")
     await agent.initialize()
 
     # Use MagicMock for response (httpx response.json() is sync)
