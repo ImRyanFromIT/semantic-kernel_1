@@ -110,6 +110,43 @@ class SrmUpdateChatResponse(BaseModel):
     status: str  # "disabled" for this service
 
 
+class MaintainerSearchRequest(BaseModel):
+    """Request model for maintainer search endpoint."""
+    query: str
+    top_k: int = 5
+
+
+class MaintainerSearchResponse(BaseModel):
+    """Response model for maintainer search endpoint."""
+    results: list[dict]
+
+
+class MaintainerGetRequest(BaseModel):
+    """Request model for maintainer get by ID endpoint."""
+    srm_id: str
+
+
+class MaintainerGetResponse(BaseModel):
+    """Response model for maintainer get by ID endpoint."""
+    srm: dict | None
+    error: str | None = None
+
+
+class MaintainerUpdateRequest(BaseModel):
+    """Request model for maintainer update endpoint."""
+    srm_id: str
+    updates: dict  # e.g., {"owner_notes": "new text"}
+
+
+class MaintainerUpdateResponse(BaseModel):
+    """Response model for maintainer update endpoint."""
+    success: bool
+    srm_id: str
+    srm_name: str | None = None
+    changes: list[dict] | None = None
+    error: str | None = None
+
+
 # ============================================================================
 # STARTUP
 # ============================================================================
@@ -176,6 +213,14 @@ async def startup_event():
         vector_store=app.state.vector_store
     )
     print("[+] Feedback system initialized")
+
+    # Initialize maintainer plugin for API endpoints
+    print("[*] Initializing maintainer plugin...")
+    from src.plugins.maintainer.srm_metadata_plugin import SRMMetadataPlugin
+    app.state.maintainer_plugin = SRMMetadataPlugin(
+        vector_store=app.state.vector_store
+    )
+    print("[+] Maintainer plugin initialized")
 
     # Initialize session storage for multi-turn conversations
     app.state.chat_sessions: Dict[str, Dict[str, Any]] = {}
