@@ -1,6 +1,22 @@
 #!/usr/bin/env python3
 """
-Test Azure Search connection directly.
+Azure Search Connection Test
+
+Purpose: Direct test of Azure Search connection (manual test script).
+
+Type: Manual
+Status: Manual execution only
+
+Key Test Areas:
+- Azure AI Search connectivity
+- Search client configuration
+- Manual verification
+
+Dependencies:
+- .env file with Azure Search credentials
+- Live Azure AI Search service
+
+Note: This is a manual test script, not part of automated test suite.
 """
 
 import asyncio

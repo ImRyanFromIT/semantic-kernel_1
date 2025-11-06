@@ -1,8 +1,24 @@
 """
-Tests for ExtractionPlugin.
+Extraction Plugin Tests
 
-This module tests the data extraction plugin which uses LLM to extract
-structured SRM change request data from emails.
+Purpose: Test data extraction plugin using LLM to extract structured
+         SRM change request data from emails.
+
+Type: Unit
+Test Count: 14
+
+Key Test Areas:
+- Data extraction from email body
+- Completeness checking (required fields)
+- Conflict detection
+- LLM prompt handling
+- Error handling and recovery
+- Edge cases (missing fields, malformed data)
+
+Dependencies:
+- extraction_plugin fixture
+- mock_kernel fixture
+- mock_error_handler fixture
 """
 
 import pytest

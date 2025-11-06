@@ -1,8 +1,21 @@
 """
-Test that Azure Search configuration is correctly loaded.
+Azure Search Configuration Tests
 
-This is a regression test for the bug where AZURE_SEARCH_ENDPOINT
-was used instead of AZURE_AI_SEARCH_ENDPOINT.
+Purpose: Regression test for Azure Search environment variable loading.
+
+Type: Unit
+Test Count: 2 
+
+Key Test Areas:
+- Environment variable loading (AZURE_AI_SEARCH_ENDPOINT vs AZURE_SEARCH_ENDPOINT)
+- Configuration validation
+- Regression prevention
+
+Dependencies:
+- Environment variable mocking
+
+Note: Regression test for bug where AZURE_SEARCH_ENDPOINT was used
+      instead of AZURE_AI_SEARCH_ENDPOINT.
 """
 
 import os

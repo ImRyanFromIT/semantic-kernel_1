@@ -1,14 +1,20 @@
 """
-Tests for EmailPlugin - Microsoft Graph API email operations.
+Email Plugin Tests
 
-Test Coverage:
-1. Authentication with Graph API
-2. Fetching emails with filtering
-3. Sending emails
-4. Replying to emails
-5. Escalating emails
-6. Sending update notifications with validation
-7. Error handling for invalid domains
+Purpose: Test Microsoft Graph API email operations including fetching,
+         sending, replying, and escalation.
+
+Type: Unit
+Test Count: 12
+
+Key Test Areas:
+- Graph API authentication
+- Fetching emails with filtering
+- Sending emails with domain validation
+- Replying to emails
+- Escalating emails
+- Update notifications with before/after state
+- Error handling for invalid domains
 """
 
 import pytest
