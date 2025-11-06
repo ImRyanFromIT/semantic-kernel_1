@@ -57,3 +57,30 @@ async def test_update_srm_metadata_calls_api():
     # Assert
     assert "success" in result.lower()
     assert "SRM-001" in result
+
+
+@pytest.mark.asyncio
+async def test_get_stats_calls_api():
+    """Test get_stats makes HTTP call to chatbot API."""
+    # Arrange
+    plugin = ConciergeAPIClientPlugin(base_url="http://localhost:8000")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "total_srms": 56,
+        "temp_srms": 2,
+        "chatbot_url": "http://localhost:8000",
+        "status": "healthy"
+    }
+
+    # Act
+    with patch('httpx.AsyncClient.get', new_callable=AsyncMock, return_value=mock_response):
+        result = await plugin.get_stats()
+
+    # Assert
+    assert "56" in result
+    assert "2" in result
+    data = json.loads(result)
+    assert data["total_srms"] == 56
+    assert data["temp_srms"] == 2

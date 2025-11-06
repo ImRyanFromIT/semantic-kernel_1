@@ -180,3 +180,36 @@ class MaintainerAPIClientPlugin:
                 "success": False,
                 "error": str(e)
             })
+
+    @kernel_function(
+        description=(
+            "Get system statistics including total SRM count and temp SRM count. "
+            "Use this when responding to help command to show current state."
+        ),
+        name="get_stats"
+    )
+    async def get_stats(self) -> Annotated[str, "JSON object with system statistics"]:
+        """
+        Get system statistics from chatbot API.
+
+        Returns:
+            JSON string with stats (total_srms, temp_srms, chatbot_url, status)
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/api/concierge/stats"
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"Stats retrieved: {data.get('total_srms')} total, {data.get('temp_srms')} temp")
+                    return json.dumps(data, indent=2)
+                else:
+                    error_msg = f"Stats API returned status {response.status_code}"
+                    logger.error(error_msg)
+                    return json.dumps({"error": error_msg})
+
+        except Exception as e:
+            logger.error(f"Stats API call failed: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})

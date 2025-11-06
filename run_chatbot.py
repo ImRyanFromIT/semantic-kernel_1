@@ -787,6 +787,43 @@ async def maintainer_health_endpoint():
         }
 
 
+@app.get("/api/maintainer/stats")
+async def maintainer_stats_endpoint():
+    """
+    Get maintainer system statistics.
+
+    Returns current state information for help command:
+    - Total SRM count
+    - Temp SRM count (always 0 for now)
+    - Chatbot URL
+    """
+    try:
+        # Count total SRMs in vector store
+        # For in-memory store, we need to count records
+        total_count = 0
+        if hasattr(app.state, 'vector_store'):
+            # Search with empty query to get all records (limited to top 100 for count)
+            results = []
+            async for result in await app.state.vector_store.search("", top_k=100):
+                results.append(result)
+            total_count = len(results)
+
+        return {
+            "total_srms": total_count,
+            "temp_srms": 0,  # Phase 3 will implement this
+            "chatbot_url": "http://localhost:8000",
+            "status": "healthy"
+        }
+    except Exception as e:
+        return {
+            "total_srms": 0,
+            "temp_srms": 0,
+            "chatbot_url": "http://localhost:8000",
+            "status": "error",
+            "error": str(e)
+        }
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -880,6 +917,11 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Set environment variables for server configuration so startup_event can access them
+    import os
+    os.environ['CHATBOT_HOST'] = args.host
+    os.environ['CHATBOT_PORT'] = str(args.port)
 
     import uvicorn
 
