@@ -24,15 +24,17 @@ class ConciergeAPIClientPlugin:
     HTTP requests only.
     """
 
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = "http://localhost:8000", debug: bool = False):
         """
         Initialize API client plugin.
 
         Args:
             base_url: Base URL of chatbot service (hardcoded for demo)
+            debug: Enable debug output for function calls
         """
         self.base_url = base_url.rstrip('/')
         self.timeout = 30.0
+        self.debug = debug
 
     @staticmethod
     def normalize_srm_id(srm_id: str) -> str:
@@ -91,6 +93,12 @@ class ConciergeAPIClientPlugin:
         Returns:
             JSON string with search results
         """
+        # Progress indicator
+        if self.debug:
+            print(f"[DEBUG] Calling search_srm(query='{query}', top_k={top_k})")
+        else:
+            print("[*] Searching...", flush=True)
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
@@ -133,6 +141,12 @@ class ConciergeAPIClientPlugin:
         Returns:
             JSON string with SRM data
         """
+        # Progress indicator
+        if self.debug:
+            print(f"[DEBUG] Calling get_srm_by_id(srm_id='{srm_id}')")
+        else:
+            print("[*] Getting details...", flush=True)
+
         try:
             # Normalize ID to standard format (SRM-XXX)
             normalized_id = self.normalize_srm_id(srm_id)
@@ -181,6 +195,12 @@ class ConciergeAPIClientPlugin:
         Returns:
             JSON string with update result
         """
+        # Progress indicator
+        if self.debug:
+            print(f"[DEBUG] Calling update_srm_metadata(srm_id='{srm_id}', updates={updates})")
+        else:
+            print("[*] Updating...", flush=True)
+
         try:
             # Normalize ID to standard format (SRM-XXX)
             normalized_id = self.normalize_srm_id(srm_id)
@@ -236,6 +256,12 @@ class ConciergeAPIClientPlugin:
         Returns:
             JSON string with stats (total_srms, temp_srms, chatbot_url, status)
         """
+        # Progress indicator
+        if self.debug:
+            print("[DEBUG] Calling get_stats()")
+        else:
+            print("[*] Getting stats...", flush=True)
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(
@@ -279,6 +305,12 @@ class ConciergeAPIClientPlugin:
         Returns:
             JSON string with batch update results
         """
+        # Progress indicator
+        if self.debug:
+            print(f"[DEBUG] Calling batch_update_srms(filter={filter_json}, updates={updates_json})")
+        else:
+            print("[*] Batch updating...", flush=True)
+
         try:
             # Parse to validate JSON
             filter_data = json.loads(filter_json)
@@ -330,6 +362,12 @@ class ConciergeAPIClientPlugin:
         srm_data_json: Annotated[str, "JSON with SRM fields (name, category, owning_team, use_case)"]
     ) -> Annotated[str, "JSON response with temp SRM ID and details"]:
         """Create temporary SRM via chatbot API."""
+        # Progress indicator
+        if self.debug:
+            print(f"[DEBUG] Calling create_temp_srm(data={srm_data_json})")
+        else:
+            print("[*] Creating temp SRM...", flush=True)
+
         try:
             srm_data = json.loads(srm_data_json)
 
@@ -358,6 +396,12 @@ class ConciergeAPIClientPlugin:
     )
     async def list_temp_srms(self) -> Annotated[str, "JSON array of temp SRMs"]:
         """List temporary SRMs via chatbot API."""
+        # Progress indicator
+        if self.debug:
+            print("[DEBUG] Calling list_temp_srms()")
+        else:
+            print("[*] Listing temp SRMs...", flush=True)
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(
@@ -385,6 +429,12 @@ class ConciergeAPIClientPlugin:
         srm_id: Annotated[str, "Temp SRM ID to delete (e.g., 'SRM-TEMP-001')"]
     ) -> Annotated[str, "JSON response with success status"]:
         """Delete temporary SRM via chatbot API."""
+        # Progress indicator
+        if self.debug:
+            print(f"[DEBUG] Calling delete_temp_srm(srm_id='{srm_id}')")
+        else:
+            print("[*] Deleting temp SRM...", flush=True)
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(

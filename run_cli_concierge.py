@@ -11,6 +11,8 @@ Usage:
 
 import asyncio
 import sys
+import os
+import signal
 import logging
 import argparse
 from pathlib import Path
@@ -36,8 +38,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Reduce verbose logging from SK
+# Reduce verbose logging from SK and httpx
 logging.getLogger('semantic_kernel').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
 
 
 class CLIConciergeAgent:
@@ -65,20 +68,6 @@ class CLIConciergeAgent:
             True if successful, False otherwise
         """
         try:
-<<<<<<< HEAD:run_cli_maintainer.py
-=======
-            print("\n" + r"""
-  _____ _____  __  __    _____                _
- / ____|  __ \|  \/  |  / ____|              (_)
-| (___ | |__) | \  / | | |     ___  _ __   ___ _  ___ _ __ __ _  ___
- \___ \|  _  /| |\/| | | |    / _ \| '_ \ / __| |/ _ \ '__/ _` |/ _ \
- ____) | | \ \| |  | | | |___| (_) | | | | (__| |  __/ | | (_| |  __/
-|_____/|_|  \_\_|  |_|  \_____\___/|_| |_|\___|_|\___|_|  \__, |\___|
-                                                            __/ |
-                 ~* AI At Your Service *~                  |___/
-""")
-
->>>>>>> ba13b90 (refactor: rebrand CLI Maintainer to SRM Concierge):run_cli_concierge.py
             # Create kernel
             print("[*] Initializing Semantic Kernel...")
             self.kernel = create_kernel()
@@ -86,7 +75,7 @@ class CLIConciergeAgent:
 
             # Add API client plugin
             print(f"[*] Connecting to chatbot service at {self.chatbot_url}...")
-            api_client = ConciergeAPIClientPlugin(base_url=self.chatbot_url)
+            api_client = ConciergeAPIClientPlugin(base_url=self.chatbot_url, debug=self.debug)
             self.kernel.add_plugin(api_client, plugin_name="api_client")
             print("[+] API client plugin loaded")
 
@@ -103,7 +92,6 @@ CAPABILITIES:
 - Search for SRMs by keywords or name
 - View detailed SRM information
 - Update owner notes and hidden notes for SRMs
-<<<<<<< HEAD:run_cli_maintainer.py
 - Display help information with current system state
 
 HELP COMMAND:
@@ -166,9 +154,11 @@ When user wants to add a temp SRM:
    - owning_team: Team name (can be new team)
    - use_case: What the SRM does
 2. If any required fields are missing, ask clarifying questions
-3. Show the extracted details to user for confirmation
-4. Call create_temp_srm with JSON data
+3. Show the extracted details to user for confirmation ONCE
+4. When user confirms (yes/ok/confirm/etc) → IMMEDIATELY call create_temp_srm with JSON data
 5. Display success message with temp SRM ID
+
+CRITICAL: Do NOT ask for confirmation multiple times. One confirmation is enough.
 
 Temp SRMs:
 - Get IDs like SRM-TEMP-001, SRM-TEMP-002
@@ -181,8 +171,6 @@ OTHER:
   'quit' - Exit
 
 Type any natural language request and I'll figure out what you need!
-=======
->>>>>>> ba13b90 (refactor: rebrand CLI Maintainer to SRM Concierge):run_cli_concierge.py
 
 EXAMPLE INTERACTIONS:
 User: "show storage SRMs"
@@ -203,8 +191,18 @@ You: [Get SRM-036, show current hidden_notes, ask for confirmation, then update]
 KEY BEHAVIORS:
 1. When user mentions an SRM by name, use search_srm to find the ID
 2. Before updating, use get_srm_by_id to show current values
-3. ALWAYS ask for confirmation before calling update_srm_metadata
-4. After updating, show the before/after changes clearly
+3. Ask for confirmation ONCE before calling any modification function
+4. Accept ANY reasonable confirmation: "yes", "ok", "looks good", "confirm", "go ahead", "proceed"
+5. If user input has a typo (e.g., "owner notres"), auto-correct it and mention the correction in your confirmation request - do NOT ask about the typo separately
+6. Once you receive confirmation in ANY form, proceed immediately with the operation (update_srm_metadata, create_temp_srm, etc.) - NEVER ask for confirmation again
+7. After updating, show the before/after changes clearly
+
+CONFIRMATION FLOW (CRITICAL - APPLIES TO ALL OPERATIONS):
+- Ask ONCE: "I'll [action]. Proceed?" or "Confirm? (yes/no)"
+- If user confirms in ANY way (yes/ok/confirm/go ahead/proceed) → IMMEDIATELY call the function
+- Do NOT re-ask or require exact "yes/no"
+- One confirmation request is THE LIMIT - do not ask again
+- This applies to: update_srm_metadata, create_temp_srm, batch_update_srms, delete_temp_srm
 
 FORMATTING RULES:
 5. ALWAYS display search results in this EXACT markdown table format:
@@ -214,6 +212,11 @@ FORMATTING RULES:
 6. Keep use case summaries to 1-2 sentences max
 7. Mark temp SRMs in search results with [TEMP] prefix:
    | [TEMP] SRM-TEMP-001 | Test SRM | ... |
+
+STYLE RULES:
+- NO EMOJIS - use plain ASCII text only
+- Keep responses professional and terminal-friendly
+- Use markdown formatting for tables and lists
 
 Be conversational, friendly, and helpful. Always confirm before making changes.""",
                 function_choice_behavior=FunctionChoiceBehavior.Auto()
@@ -255,6 +258,14 @@ Be conversational, friendly, and helpful. Always confirm before making changes."
 
     async def run_repl(self):
         """Run the interactive REPL loop."""
+        # Install signal handler for immediate Ctrl+C exit
+        # Uses os._exit(0) to bypass thread cleanup and exit immediately
+        def signal_handler(sig, frame):
+            print("\n\nShutdown complete.")
+            os._exit(0)
+
+        signal.signal(signal.SIGINT, signal_handler)
+
         print("\nConcierge> ", end='', flush=True)
 
         while True:
@@ -284,57 +295,12 @@ Be conversational, friendly, and helpful. Always confirm before making changes."
 
                 # Get agent response (auto function calling enabled)
                 print()  # Newline before response
-
-                # Track function calls for progress indicators
-                seen_functions = set()
-
                 async for response in self.agent.invoke_stream(self.history):
-                    # Check for function calls in the response
-                    if hasattr(response, 'items') and response.items:
-                        for item in response.items:
-                            # Check if this is a function call
-                            if hasattr(item, 'function_name') and item.function_name:
-                                func_name = item.function_name
-
-                                # Show progress indicator only once per function call
-                                if func_name not in seen_functions:
-                                    seen_functions.add(func_name)
-
-                                    if self.debug:
-                                        # Debug mode: show function name and arguments
-                                        args_str = ""
-                                        if hasattr(item, 'arguments'):
-                                            args_str = f" {item.arguments}"
-                                        print(f"\n[DEBUG] Calling {func_name}{args_str}")
-                                    else:
-                                        # Normal mode: show friendly progress message
-                                        if func_name == "search_srm":
-                                            print("[*] Searching...", flush=True)
-                                        elif func_name == "get_srm_by_id":
-                                            print("[*] Getting details...", flush=True)
-                                        elif func_name == "update_srm_metadata":
-                                            print("[*] Updating...", flush=True)
-                                        elif func_name == "get_stats":
-                                            print("[*] Getting stats...", flush=True)
-                                        elif func_name == "batch_update_srms":
-                                            print("[*] Batch updating...", flush=True)
-                                        elif func_name == "create_temp_srm":
-                                            print("[*] Creating temp SRM...", flush=True)
-                                        elif func_name == "list_temp_srms":
-                                            print("[*] Listing temp SRMs...", flush=True)
-                                        elif func_name == "delete_temp_srm":
-                                            print("[*] Deleting temp SRM...", flush=True)
-
-                    # Print the actual response content
-                    if response.content:
-                        print(response.content, end='', flush=True)
+                    print(response.content, end='', flush=True)
 
                 print()  # Newline after response
                 print("\nConcierge> ", end='', flush=True)
 
-            except KeyboardInterrupt:
-                print("\n\nInterrupted. Type 'quit' to exit.")
-                print("\nConcierge> ", end='', flush=True)
             except Exception as e:
                 logger.error(f"Error in REPL: {e}", exc_info=True)
                 print(f"\n[ERROR] {e}")
@@ -371,8 +337,6 @@ async def main():
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n\nShutdown complete.")
     except Exception as e:
         logger.error(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)
