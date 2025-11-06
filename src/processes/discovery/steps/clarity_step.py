@@ -185,7 +185,7 @@ class ClarityStep(KernelProcessStep[ClarityStepState]):
             )
             return result
         except Exception as e:
-            logger.warning("Intent detection failed, using default", extra={"error": str(e)})
+            logger.debug("Intent detection failed, using default", extra={"error": str(e)})
             return "GeneralInquiry"
     
     async def _extract_entities(self, user_query: str, kernel: Kernel) -> str:
@@ -211,8 +211,8 @@ class ClarityStep(KernelProcessStep[ClarityStepState]):
             )
             return result
         except Exception as e:
-            logger.warning("Entity extraction failed, using default", extra={"error": str(e)})
-            return "none"
+            logger.debug("Entity extraction failed, using default", extra={"error": str(e)})
+            return ""  # Return empty string so split() returns empty list
     
     async def _assess_clarity(self, user_query: str, extracted_entities: str, kernel: Kernel) -> bool:
         '''
@@ -238,7 +238,7 @@ class ClarityStep(KernelProcessStep[ClarityStepState]):
             )
             return result.lower() == 'unclear'
         except Exception as e:
-            logger.warning("Clarity assessment failed, defaulting to clear", extra={"error": str(e)})
+            logger.debug("Clarity assessment failed, defaulting to clear", extra={"error": str(e)})
             # Default to not needing clarification on error
             return False
     
@@ -274,6 +274,6 @@ class ClarityStep(KernelProcessStep[ClarityStepState]):
             )
             return result
         except Exception as e:
-            logger.warning("Clarification generation failed, using default", extra={"error": str(e)})
+            logger.debug("Clarification generation failed, using default", extra={"error": str(e)})
             return "Could you provide more details about your request?"
 

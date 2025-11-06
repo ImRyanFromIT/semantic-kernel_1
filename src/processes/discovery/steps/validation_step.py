@@ -146,8 +146,8 @@ class ValidationStep(KernelProcessStep):
             if not content_valid:
                 return False, content_reason
         except Exception as e:
-            logger.warning("LLM validation failed, failing open", extra={"error": str(e)})
-        
+            logger.debug("LLM validation failed, failing open", extra={"error": str(e)})
+
         return True, ''
     
     def _check_patterns(self, user_query: str) -> tuple[bool, str]:

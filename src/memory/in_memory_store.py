@@ -9,13 +9,56 @@ from semantic_kernel.connectors.in_memory import InMemoryStore
 
 from src.memory.vector_store_base import VectorStoreBase
 from src.models.srm_record import SRMRecord
+from src.utils.text_matching import search_record_fields
+from src.utils.ranking import reciprocal_rank_fusion
+
+
+class SearchResult:
+    '''Wrapper for search results.'''
+
+    def __init__(self, record, score):
+        '''
+        Initialize search result.
+
+        Args:
+            record: The record object
+            score: Search relevance score
+        '''
+        self.record = record
+        self.score = score
 
 
 class InMemoryVectorStore(VectorStoreBase):
     '''
-    In-memory vector store implementation for SRM records.
-    
-    Uses Semantic Kernel's InMemoryStore with embeddings.
+    In-memory vector store with hybrid search capabilities.
+
+    Combines Semantic Kernel's InMemoryStore for vector similarity
+    with custom fuzzy keyword matching using Reciprocal Rank Fusion (RRF).
+
+    Features:
+    - Vector similarity search (semantic matching via embeddings)
+    - Fuzzy keyword matching (handles typos, partial matches)
+    - Reciprocal Rank Fusion for intelligent result merging
+    - Configurable fuzzy threshold and RRF parameters
+
+    Best for: Development, testing, prototyping. Not recommended for
+    production due to lack of persistence and scalability limits.
+
+    Example:
+        >>> from src.memory.in_memory_store import InMemoryVectorStore
+        >>> from src.utils.embedding_service import AzureEmbeddingService
+        >>>
+        >>> embedding_gen = AzureEmbeddingService()
+        >>> store = InMemoryVectorStore(embedding_gen)
+        >>> await store.ensure_collection_exists()
+        >>>
+        >>> # Upsert records
+        >>> await store.upsert(records)
+        >>>
+        >>> # Hybrid search
+        >>> results = await store.search("database backup", top_k=5)
+        >>> async for result in results:
+        >>>     print(f"{result.record.name}: {result.score}")
     '''
     
     def __init__(self, embedding_generator: EmbeddingGeneratorBase):
@@ -62,30 +105,103 @@ class InMemoryVectorStore(VectorStoreBase):
         await self.collection.upsert(records)
     
     async def search(
-        self, 
-        query: str, 
-        top_k: int = 8, 
-        filters: dict | None = None
+        self,
+        query: str,
+        top_k: int = 8,
+        filters: dict | None = None,
+        fuzzy_threshold: float = 0.8,
+        rrf_k: int = 60
     ) -> AsyncIterator[Any]:
         '''
-        Search for similar SRM records using vector similarity.
-        
+        Hybrid search combining vector similarity and fuzzy keyword matching.
+
+        Uses Reciprocal Rank Fusion to combine:
+        1. Vector similarity search (semantic matching)
+        2. Fuzzy keyword search across name, category, and use_case fields
+
         Args:
             query: The search query text
             top_k: Number of top results to return
             filters: Optional filters (not fully implemented for InMemory)
-            
+            fuzzy_threshold: Minimum similarity score for keyword matches (0.0-1.0)
+            rrf_k: RRF constant for rank fusion (default: 60)
+
         Returns:
-            AsyncIterator of search results with scores and records
+            AsyncIterator of search results sorted by RRF score
+
+        Raises:
+            ValueError: If fuzzy_threshold is not in range [0.0, 1.0] or rrf_k is not positive
         '''
+        # Validate parameters
+        if not 0.0 <= fuzzy_threshold <= 1.0:
+            raise ValueError(f"fuzzy_threshold must be in range [0.0, 1.0], got {fuzzy_threshold}")
+        if rrf_k <= 0:
+            raise ValueError(f"rrf_k must be positive, got {rrf_k}")
+
         if not self.collection:
             await self.ensure_collection_exists()
-        
-        # Perform vector search
-        results = await self.collection.search(query, top=top_k)
-        
-        # Return results as async iterator
-        return results.results
+
+        # Skip hybrid search for empty queries - return empty results
+        if not query or not query.strip():
+            async def empty_iterator():
+                return
+                yield  # Make it a generator (unreachable but makes it async gen)
+            return empty_iterator()
+
+        # 1. Vector search (semantic similarity)
+        # Generate embedding for the query
+        query_embeddings = await self.embedding_generator.generate_embeddings([query])
+        query_embedding = query_embeddings[0]
+        if hasattr(query_embedding, 'tolist'):
+            query_embedding = query_embedding.tolist()
+
+        # Fetch more results for better RRF coverage
+        vector_results = await self.collection.search(vector=query_embedding, top=top_k * 2)
+        vector_records = [result.record async for result in vector_results.results]
+
+        # 2. Keyword search (fuzzy matching)
+        # Get all records and score them by keyword matching
+        # NOTE: Using top=1000 as a "get all" approach has a limitation - it won't work for
+        # collections with >1000 records. This is acceptable for development and testing scenarios
+        # where the dataset is small. For production use with larger datasets, consider using
+        # SQLite or Azure AI Search stores which handle this more efficiently.
+        all_records_result = await self.collection.search(vector=query_embedding, top=1000)
+        all_records = [result.record async for result in all_records_result.results]
+
+        keyword_scored = []
+        for record in all_records:
+            score = search_record_fields(query, record)
+            if score >= fuzzy_threshold:
+                keyword_scored.append((record, score))
+
+        # Sort by keyword score
+        keyword_scored.sort(key=lambda x: x[1], reverse=True)
+        keyword_records = [record for record, score in keyword_scored[:top_k * 2]]
+
+        # 3. Reciprocal Rank Fusion
+        rrf_results = reciprocal_rank_fusion(vector_records, keyword_records, k=rrf_k)
+
+        # 4. Get top_k record IDs from RRF
+        top_ids = [record_id for record_id, score in rrf_results[:top_k]]
+
+        # 5. Fetch full records in RRF order
+        final_results = []
+        for record_id in top_ids:
+            record = await self.collection.get(record_id)
+            if record:
+                # Create a result object with RRF score
+                result = SearchResult(
+                    record=record,
+                    score=dict(rrf_results)[record_id]  # RRF score
+                )
+                final_results.append(result)
+
+        # Return as async iterator
+        async def result_iterator():
+            for result in final_results:
+                yield result
+
+        return result_iterator()
     
     async def get_by_id(self, record_id: str) -> SRMRecord | None:
         '''

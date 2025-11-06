@@ -13,3 +13,4 @@ pytest-mock
 pytest-cov
 pytest-timeout
 freezegun
+azure-ai-evaluation

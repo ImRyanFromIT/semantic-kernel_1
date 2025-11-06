@@ -1,0 +1,5 @@
+{"query": "What SRM should I use for web hosting?", "expected_context": "web hosting, web server, HTTP", "notes": "Should recommend SRMs related to web hosting services"}
+{"query": "I need a database server", "expected_context": "database, SQL, data storage", "notes": "Should recommend SRMs related to database services"}
+{"query": "Show me monitoring tools", "expected_context": "monitoring, observability, metrics, alerts", "notes": "Should recommend SRMs for monitoring and observability"}
+{"query": "What do you recommend for load balancing?", "expected_context": "load balancer, traffic distribution, high availability", "notes": "Should recommend SRMs related to load balancing"}
+{"query": "I need backup solutions", "expected_context": "backup, disaster recovery, data protection", "notes": "Should recommend SRMs related to backup and recovery"}

@@ -252,14 +252,15 @@ async def startup_event():
     print("[+] Vector store created")
 
     # Load data based on store type
-    store_type = os.getenv('VECTOR_STORE_TYPE', 'azure_search').lower()
+    store_type = os.getenv('VECTOR_STORE_TYPE', 'in_memory').lower()
 
     if store_type == 'in_memory':
-        # Load SRM catalog from CSV for in-memory store
-        print("[*] Loading SRM catalog from CSV...")
+        # Load SRM data from CSV for in-memory store
+        print("[*] Loading SRM data from srm_index.csv...")
         data_loader = SRMDataLoader(app.state.vector_store)
-        num_records = await data_loader.load_and_index("data/srm_catalog.csv")
+        num_records = await data_loader.load_and_index("data/srm_index.csv")
         print(f"[+] Loaded and indexed {num_records} SRM records")
+
     else:
         # Azure AI Search - data already exists in the index
         print("[*] Using existing Azure AI Search index...")
